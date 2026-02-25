@@ -21,7 +21,14 @@ logger = logging.getLogger(__name__)
 # Initialize MCP server
 # stateless_http=True makes streamable-http endpoints easier for external crawlers
 # that do single-call JSON-RPC probing (e.g. 8004 auto_fetch).
-mcp = FastMCP("ainft-account-manager", stateless_http=True)
+# Pass host/port explicitly to avoid FastMCP defaulting to localhost security
+# rules that reject public Host headers.
+mcp = FastMCP(
+    "ainft-account-manager",
+    stateless_http=True,
+    host=settings.host,
+    port=settings.port,
+)
 
 # Network identifier
 network_id = f"tron:{settings.network}"
