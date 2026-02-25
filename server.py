@@ -1,29 +1,13 @@
 """AINFT Account Manager - MCP Server for x402 payment-required challenges."""
 
+import base64
+import json
 import logging
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
-import sys
 from typing import Any
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
-
-try:
-    from bankofai.x402.encoding import encode_payment_payload
-    from bankofai.x402.exceptions import UnknownTokenError
-    from bankofai.x402.tokens import TokenRegistry
-    from bankofai.x402.types import PaymentRequired, PaymentRequirements, ResourceInfo
-except ModuleNotFoundError:
-    local_x402_src = (
-        Path(__file__).resolve().parents[2] / "x402" / "python" / "x402" / "src"
-    )
-    if local_x402_src.exists():
-        sys.path.insert(0, str(local_x402_src))
-    from bankofai.x402.encoding import encode_payment_payload
-    from bankofai.x402.exceptions import UnknownTokenError
-    from bankofai.x402.tokens import TokenRegistry
-    from bankofai.x402.types import PaymentRequired, PaymentRequirements, ResourceInfo
 
 from src.config import network_config, settings
 
@@ -41,6 +25,11 @@ mcp = FastMCP("ainft-account-manager", stateless_http=True)
 
 # Network identifier
 network_id = f"tron:{settings.network}"
+
+
+def encode_payment_payload(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return base64.b64encode(raw).decode("utf-8")
 
 
 @mcp.tool()
@@ -84,33 +73,28 @@ def recharge(amount: str, token: str = "USDT") -> dict[str, Any]:
         asset_address = "TRX"
     else:
         scheme = "exact_permit"
-        try:
-            token_info = TokenRegistry.get_token(network_id, token_symbol)
-            asset_address = token_info.address
-        except UnknownTokenError:
-            asset_address = token_cfg.get("address")
-            if not asset_address:
-                raise ValueError(
-                    f"x402 token registry missing token and no contract address in config: {token_symbol}"
-                )
+        asset_address = token_cfg.get("address")
+        if not asset_address:
+            raise ValueError(f"Token contract address missing in config: {token_symbol}")
 
-    requirement = PaymentRequirements(
-        scheme=scheme,
-        network=network_id,
-        amount=str(amount_smallest),
-        asset=asset_address,
-        payTo=network_config.ainft_deposit_address,
-    )
-    challenge = PaymentRequired(
-        x402Version=2,
-        error="Payment Required",
-        resource=ResourceInfo(
-            url=f"ainft://recharge/{token_symbol.lower()}",
-            description="AINFT recharge payment challenge",
-            mimeType="application/json",
-        ),
-        accepts=[requirement],
-    )
+    challenge = {
+        "x402Version": 2,
+        "error": "Payment Required",
+        "resource": {
+            "url": f"ainft://recharge/{token_symbol.lower()}",
+            "description": "AINFT recharge payment challenge",
+            "mimeType": "application/json",
+        },
+        "accepts": [
+            {
+                "scheme": scheme,
+                "network": network_id,
+                "amount": str(amount_smallest),
+                "asset": asset_address,
+                "payTo": network_config.ainft_deposit_address,
+            }
+        ],
+    }
 
     logger.info(
         "Generated x402 challenge: token=%s amount=%s network=%s pay_to=%s",
@@ -124,7 +108,7 @@ def recharge(amount: str, token: str = "USDT") -> dict[str, Any]:
         "headers": {
             "PAYMENT-REQUIRED": encode_payment_payload(challenge),
         },
-        "body": challenge.model_dump(by_alias=True),
+        "body": challenge,
         "message": "Use your x402 client tool to pay, then retry the business request.",
     }
 
