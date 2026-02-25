@@ -39,5 +39,34 @@
         "minimum": "100000000000"
       }
     }
+  },
+  "nile": {
+    "name": "TRON Nile",
+    "rpcUrl": "https://nile.trongrid.io",
+    "explorer": "https://nile.tronscan.org",
+    "chainId": "3448148188",
+    "ainftDepositAddress": "TAJJNMLYBxVUdNi6UrTspkkc7aCQPbYVUp",
+    "ainftApiUrl": "https://chat-dev.ainft.com/webapi/",
+    "ainftWebUrl": "https://chat-dev.ainft.com",
+    "erc8004Registry": "",
+    "tokens": {
+      "TRX": {
+        "symbol": "TRX",
+        "decimals": 6,
+        "minimum": "1000000"
+      },
+      "USDT": {
+        "symbol": "USDT",
+        "address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+        "decimals": 6,
+        "minimum": "1000000"
+      },
+      "USDD": {
+        "symbol": "USDD",
+        "address": "TGjgvdTWWrybVLaVeFqSyVqJQWjxqRYbaK",
+        "decimals": 18,
+        "minimum": "1000000000000000000"
+      }
+    }
   }
 }

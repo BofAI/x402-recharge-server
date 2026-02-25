@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     # Service
     service_fee_trx: float = Field(default=0.0)
     rate_limit_per_minute: int = Field(default=10)
-    
+
+    # x402 settlement facilitator
+    x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
+
     class Config:
         env_file = ".env"
         case_sensitive = False

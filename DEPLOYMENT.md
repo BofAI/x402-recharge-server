@@ -4,6 +4,7 @@
 
 - Docker 24+
 - Docker Compose v2
+- Verified payment target network: `nile` (recommended for testing)
 
 ## 1. Configure Environment
 
@@ -13,7 +14,7 @@ cp .env.example .env
 
 Required runtime values:
 
-- `NETWORK=mainnet`
+- `NETWORK=mainnet|nile` (for x402 testing, use `nile`)
 - `HOST=0.0.0.0`
 - `PORT=8000`
 - `LOG_LEVEL=info`
@@ -29,6 +30,16 @@ Required runtime values:
 ```bash
 ./scripts/deploy.sh smoke
 ```
+
+Basic x402 challenge check:
+
+```bash
+curl -i -X POST 'http://127.0.0.1:8000/mcp' \
+  -H 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"recharge","arguments":{"amount":"1","token":"USDT"}}}'
+```
+
+Expected: `HTTP/1.1 402 Payment Required`.
 
 ## 4. Logs and Restart
 
@@ -61,6 +72,10 @@ Required runtime values:
 - MCP client cannot connect:
   - Confirm reverse proxy forwards `/mcp` and supports streaming responses.
   - Confirm TLS certificate is valid on public endpoint.
+- x402 payment does not complete:
+  - Confirm `NETWORK=nile`.
+  - Confirm payer wallet has Nile USDT + TRX gas.
+  - Confirm facilitator URL is reachable and unchanged.
 - Registration update fails:
   - Check `AGENT_OPERATOR_KEY` in `.env`.
   - Follow [REGISTRATION.md](docs/REGISTRATION.md).

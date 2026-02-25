@@ -61,7 +61,7 @@ def main() -> int:
         print("Error: AGENT_OPERATOR_KEY is not set")
         return 1
 
-    rpc_url = "https://api.trongrid.io"
+    rpc_url = os.getenv("TRON_RPC_URL", "https://api.trongrid.io").strip() or "https://api.trongrid.io"
 
     sdk = SDK(
         chainId=1,
