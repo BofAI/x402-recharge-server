@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     # Network
     network: str = Field(default="mainnet", description="Network: mainnet")
     tron_rpc_url: str = Field(default="https://api.trongrid.io")
-    trongrid_api_key: Optional[str] = Field(default=None)
     
     # Server
     host: str = Field(default="0.0.0.0")

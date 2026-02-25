@@ -19,7 +19,7 @@ MCP service for AINFT recharge challenge generation on TRON mainnet.
 ## Local Run
 
 ```bash
-cd /Users/bobo/code/skills/ainft-merchant-agent
+cd ainft-merchant-agent
 pip install -r requirements.txt
 python server.py
 ```
@@ -27,7 +27,7 @@ python server.py
 ## Docker Deployment
 
 ```bash
-cd /Users/bobo/code/skills/ainft-merchant-agent
+cd ainft-merchant-agent
 ./scripts/deploy.sh up
 ./scripts/deploy.sh smoke
 ```

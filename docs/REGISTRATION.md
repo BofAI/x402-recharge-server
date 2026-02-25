@@ -21,7 +21,7 @@ The metadata should contain your MCP endpoint (`https://.../mcp`) and tool list.
 ## 2. Register New Agent
 
 ```bash
-cd /Users/bobo/code/skills/ainft-merchant-agent
+cd ainft-merchant-agent
 python scripts/register_8004.py --uri https://your-domain/ainft-merchant-registration-v1.json
 ```
 
@@ -36,7 +36,7 @@ Save `agent_id` for future updates.
 ## 3. Update Existing Agent URI
 
 ```bash
-cd /Users/bobo/code/skills/ainft-merchant-agent
+cd ainft-merchant-agent
 python scripts/register_8004.py --agent-id <agent_id> --uri ipfs://<new-cid>/registration.json
 ```
 

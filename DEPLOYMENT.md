@@ -18,12 +18,6 @@ Required runtime values:
 - `PORT=8000`
 - `LOG_LEVEL=info`
 
-Optional runtime values:
-
-```bash
-TRONGRID_API_KEY=<optional>
-```
-
 ## 2. Deploy (Single Entry)
 
 ```bash

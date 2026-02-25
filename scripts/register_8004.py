@@ -22,7 +22,7 @@ try:
 except ImportError as exc:
     raise SystemExit(
         "bankofai-8004-sdk is not installed. "
-        "Install from /Users/bobo/code/skills/8004-sdk/python with: pip install -e ."
+        "Install the local SDK checkout with: pip install -e ../8004-sdk/python"
     ) from exc
 
 
