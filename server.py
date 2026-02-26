@@ -51,6 +51,7 @@ PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
 TRX_TXID_HEADER = "X-TRX-TXID"
+BILL_URL = "https://chat.ainft.com/purchase"
 
 _facilitator = FacilitatorClient(settings.x402_facilitator_url)
 _tron_addr = TronAddressConverter()
@@ -59,6 +60,12 @@ _tron_addr = TronAddressConverter()
 def _encode_payment_payload(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return base64.b64encode(raw).decode("utf-8")
+
+
+def _tx_explorer_url(tx_hash: str) -> str:
+    base = network_config.explorer.rstrip("/")
+    # TRON explorers commonly support /#/transaction/<txid>
+    return f"{base}/#/transaction/{tx_hash}"
 
 
 def _to_smallest_unit(amount: str, decimals: int) -> int:
@@ -317,9 +324,17 @@ class MCPRecharge402Middleware:
                         expected_amount_sun=int(req["amount"]),
                     )
                     if ok:
+                        tx_url = _tx_explorer_url(trx_txid)
                         success = {
                             "status": "paid",
-                            "message": "Native TRX transfer verified by server fallback.",
+                            "recharge_status": "success",
+                            "message": (
+                                f"Recharge successful. View your bill at {BILL_URL}. "
+                                f"Transaction: {tx_url}"
+                            ),
+                            "bill_url": BILL_URL,
+                            "transaction_hash": trx_txid,
+                            "transaction_url": tx_url,
                             "token": "TRX",
                             "amount": amount,
                             "pay_to": network_config.ainft_deposit_address,
@@ -363,9 +378,18 @@ class MCPRecharge402Middleware:
 
             try:
                 settle_result = await _settle_with_facilitator(payment_signature, challenge)
+                tx_hash = str(settle_result.get("transaction", ""))
+                tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
                 success = {
                     "status": "paid",
-                    "message": "Payment verified and settled by facilitator.",
+                    "recharge_status": "success",
+                    "message": (
+                        f"Recharge successful. View your bill at {BILL_URL}. "
+                        f"Transaction: {tx_url}"
+                    ) if tx_url else f"Recharge successful. View your bill at {BILL_URL}",
+                    "bill_url": BILL_URL,
+                    "transaction_hash": tx_hash,
+                    "transaction_url": tx_url,
                     "token": token.upper(),
                     "amount": amount,
                     "pay_to": network_config.ainft_deposit_address,
@@ -443,10 +467,19 @@ async def recharge(
                 "body": challenge,
                 "message": "Payment invalid or not settled. Retry payment with a valid x402 signature.",
             }
+        tx_hash = str(settle_result.get("transaction", ""))
+        tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
         return {
             "status_code": 200,
             "status": "paid",
-            "message": "Payment verified and settled by facilitator.",
+            "recharge_status": "success",
+            "message": (
+                f"Recharge successful. View your bill at {BILL_URL}. "
+                f"Transaction: {tx_url}"
+            ) if tx_url else f"Recharge successful. View your bill at {BILL_URL}",
+            "bill_url": BILL_URL,
+            "transaction_hash": tx_hash,
+            "transaction_url": tx_url,
             "token": token.upper(),
             "amount": amount,
             "pay_to": network_config.ainft_deposit_address,
@@ -516,9 +549,18 @@ async def x402_recharge(request) -> JSONResponse:
             headers={PAYMENT_REQUIRED_HEADER: _encode_payment_payload(challenge)},
         )
 
+    tx_hash = str(settle_result.get("transaction", ""))
+    tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
     success = {
         "status": "paid",
-        "message": "Payment verified and settled by facilitator.",
+        "recharge_status": "success",
+        "message": (
+            f"Recharge successful. View your bill at {BILL_URL}. "
+            f"Transaction: {tx_url}"
+        ) if tx_url else f"Recharge successful. View your bill at {BILL_URL}",
+        "bill_url": BILL_URL,
+        "transaction_hash": tx_hash,
+        "transaction_url": tx_url,
         "token": token.upper(),
         "amount": amount,
         "pay_to": network_config.ainft_deposit_address,

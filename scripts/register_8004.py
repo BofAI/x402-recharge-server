@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
     from bankofai.sdk_8004.core.sdk import SDK
+    from bankofai.sdk_8004.core.transaction_handle import TransactionHandle
 except ImportError as exc:
     raise SystemExit(
         "bankofai-8004-sdk is not installed. "
@@ -49,6 +50,16 @@ def parse_args() -> argparse.Namespace:
         default=120_000_000,
         help="TRON fee limit for write transactions",
     )
+    parser.add_argument(
+        "--network",
+        default="",
+        help="Target network for registration metadata load/update (mainnet|nile|shasta).",
+    )
+    parser.add_argument(
+        "--rpc-url",
+        default="",
+        help="Override TRON RPC URL. If omitted, uses env TRON_RPC_URL or network default.",
+    )
     return parser.parse_args()
 
 
@@ -61,20 +72,42 @@ def main() -> int:
         print("Error: AGENT_OPERATOR_KEY is not set")
         return 1
 
-    rpc_url = os.getenv("TRON_RPC_URL", "https://api.trongrid.io").strip() or "https://api.trongrid.io"
+    network = (args.network or os.getenv("NETWORK", "mainnet")).strip().lower() or "mainnet"
+    default_rpc = {
+        "mainnet": "https://api.trongrid.io",
+        "nile": "https://nile.trongrid.io",
+        "shasta": "https://api.shasta.trongrid.io",
+    }.get(network, "https://api.trongrid.io")
+    rpc_url = (args.rpc_url or os.getenv("TRON_RPC_URL", "")).strip() or default_rpc
+
+    print(f"Using network={network}, rpc_url={rpc_url}")
 
     sdk = SDK(
         chainId=1,
         rpcUrl=rpc_url,
-        network="mainnet",
+        network=network,
         signer=private_key,
         feeLimit=args.fee_limit,
     )
 
     if args.agent_id:
         print(f"Updating existing agent {args.agent_id} URI -> {args.uri}")
-        agent = sdk.loadAgent(args.agent_id)
-        handle = agent.updateRegistration(agentURI=args.uri)
+        agent_id_int = int(str(args.agent_id).split(":")[-1])
+        tx_hash = sdk.web3_client.transact_contract(
+            sdk.identity_registry,
+            "setAgentURI",
+            agent_id_int,
+            args.uri,
+        )
+        handle = TransactionHandle(
+            web3_client=sdk.web3_client,
+            tx_hash=tx_hash,
+            compute_result=lambda _receipt: type(
+                "UpdateResult",
+                (),
+                {"agentId": str(agent_id_int), "agentURI": args.uri},
+            )(),
+        )
     else:
         print("Registering new agent")
         agent = sdk.createAgent(
