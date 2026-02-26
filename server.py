@@ -6,10 +6,11 @@ import logging
 import time
 import uuid
 import asyncio
-import urllib.request
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
+import httpx
 from mcp.server.fastmcp import Context, FastMCP
 from starlette.responses import JSONResponse
 
@@ -60,6 +61,19 @@ _tron_addr = TronAddressConverter()
 def _encode_payment_payload(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return base64.b64encode(raw).decode("utf-8")
+
+
+def _payment_failure_details(exc: Exception) -> dict[str, str]:
+    raw = str(exc).strip() or exc.__class__.__name__
+    stage = "unknown"
+    reason = raw
+    if raw.startswith("facilitator verify failed:"):
+        stage = "verify"
+        reason = raw.split(":", 1)[1].strip() or "invalid_payment_signature"
+    elif raw.startswith("facilitator settle failed:"):
+        stage = "settle"
+        reason = raw.split(":", 1)[1].strip() or "transaction_failed_on_chain"
+    return {"stage": stage, "reason": reason, "raw": raw}
 
 
 def _tx_explorer_url(tx_hash: str) -> str:
@@ -190,17 +204,12 @@ async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, 
     return settle_result.model_dump(by_alias=True)
 
 
-def _tron_rpc_post(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+async def _tron_rpc_post(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
     url = f"{network_config.rpc_url.rstrip('/')}{endpoint}"
-    req = urllib.request.Request(
-        url=url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=12) as resp:
-        data = resp.read()
-    return json.loads(data.decode("utf-8")) if data else {}
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        resp = await client.post(url, json=payload)
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
 
 
 async def _verify_native_trx_transfer(
@@ -209,7 +218,7 @@ async def _verify_native_trx_transfer(
     if not txid:
         return False, "missing_txid"
     try:
-        tx = await asyncio.to_thread(_tron_rpc_post, "/wallet/gettransactionbyid", {"value": txid})
+        tx = await _tron_rpc_post("/wallet/gettransactionbyid", {"value": txid})
         if not tx or not tx.get("txID"):
             return False, "tx_not_found"
 
@@ -232,9 +241,7 @@ async def _verify_native_trx_transfer(
 
         # Poll for confirmation briefly; TronGrid may lag immediately after broadcast.
         for _ in range(8):
-            tx_info = await asyncio.to_thread(
-                _tron_rpc_post, "/wallet/gettransactioninfobyid", {"value": txid}
-            )
+            tx_info = await _tron_rpc_post("/wallet/gettransactioninfobyid", {"value": txid})
             receipt = tx_info.get("receipt") or {}
             result = receipt.get("result")
             if result == "SUCCESS":
@@ -285,8 +292,10 @@ class MCPRecharge402Middleware:
         intercept = False
         amount = ""
         token = "USDT"
+        rpc_id: Any = None
         try:
             payload = json.loads(body.decode("utf-8")) if body else {}
+            rpc_id = payload.get("id")
             params = payload.get("params") or {}
             arguments = params.get("arguments") or {}
             if payload.get("method") == "tools/call" and params.get("name") == "recharge":
@@ -297,6 +306,23 @@ class MCPRecharge402Middleware:
             intercept = False
 
         if intercept:
+            def _rpc_result(result: dict[str, Any]) -> bytes:
+                return json.dumps(
+                    {"jsonrpc": "2.0", "id": rpc_id, "result": result},
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+
+            def _rpc_error(code: int, message: str, data: dict[str, Any] | None = None) -> bytes:
+                err: dict[str, Any] = {"code": code, "message": message}
+                if data is not None:
+                    err["data"] = data
+                return json.dumps(
+                    {"jsonrpc": "2.0", "id": rpc_id, "error": err},
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ).encode("utf-8")
+
             try:
                 challenge = await _build_recharge_challenge(
                     amount=amount,
@@ -304,7 +330,11 @@ class MCPRecharge402Middleware:
                     resource_url="/mcp tools/call recharge",
                 )
             except Exception as exc:
-                fallback = json.dumps({"error": str(exc)}).encode("utf-8")
+                fallback = _rpc_error(
+                    code=-32602,
+                    message="Invalid params",
+                    data={"error": str(exc)},
+                )
                 await send(
                     {
                         "type": "http.response.start",
@@ -347,7 +377,7 @@ class MCPRecharge402Middleware:
                                 "mode": "native_trx_fallback",
                             },
                         }
-                        response_body = json.dumps(success, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                        response_body = _rpc_result(success)
                         await send(
                             {
                                 "type": "http.response.start",
@@ -362,7 +392,11 @@ class MCPRecharge402Middleware:
                         return
                     logger.warning("TRX fallback tx verify failed: %s txid=%s", reason, trx_txid)
 
-                response_body = json.dumps(challenge, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                response_body = _rpc_error(
+                    code=-32002,
+                    message="Payment Required",
+                    data={"x402": challenge},
+                )
                 await send(
                     {
                         "type": "http.response.start",
@@ -397,7 +431,7 @@ class MCPRecharge402Middleware:
                     "verified": True,
                     "settlement": settle_result,
                 }
-                response_body = json.dumps(success, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                response_body = _rpc_result(success)
                 await send(
                     {
                         "type": "http.response.start",
@@ -410,19 +444,23 @@ class MCPRecharge402Middleware:
                 )
                 await send({"type": "http.response.body", "body": response_body})
             except Exception as exc:
-                error_body = {
-                    "error": f"payment verification failed: {exc}",
-                    "message": "Payment invalid or not settled. Retry payment with a valid x402 signature.",
-                }
-                response_body = json.dumps(error_body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                details = _payment_failure_details(exc)
+                response_body = _rpc_error(
+                    code=-32003,
+                    message="Payment verification failed",
+                    data={
+                        "error": "payment_verification_failed",
+                        "failure_stage": details["stage"],
+                        "failure_reason": details["reason"],
+                        "detail": details["raw"],
+                        "message": "Provided payment is invalid or settlement failed. Create a new payment and retry.",
+                    },
+                )
                 await send(
                     {
                         "type": "http.response.start",
-                        "status": 402,
-                        "headers": [
-                            (b"content-type", b"application/json"),
-                            (PAYMENT_REQUIRED_HEADER.lower().encode("ascii"), _encode_payment_payload(challenge).encode("ascii")),
-                        ],
+                        "status": 400,
+                        "headers": [(b"content-type", b"application/json")],
                     }
                 )
                 await send({"type": "http.response.body", "body": response_body})
@@ -442,10 +480,9 @@ async def recharge(
     token: str = "USDT",
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    """Return an x402 Payment Required challenge for AINFT recharge.
+    """Recharge tool for AINFT.
 
-    This tool acts only as payee-side challenge provider. User-side x402 client
-    is responsible for signing and sending payment.
+    Note: real x402 HTTP 402/headers are enforced by MCPRecharge402Middleware.
     """
     payment_signature = None
     if ctx and ctx.request_context.request is not None:
@@ -460,17 +497,18 @@ async def recharge(
         try:
             settle_result = await _settle_with_facilitator(payment_signature, challenge)
         except Exception as exc:
+            details = _payment_failure_details(exc)
             return {
-                "status_code": 402,
-                "error": f"payment verification failed: {exc}",
-                "headers": {PAYMENT_REQUIRED_HEADER: _encode_payment_payload(challenge)},
-                "body": challenge,
-                "message": "Payment invalid or not settled. Retry payment with a valid x402 signature.",
+                "status": "payment_verification_failed",
+                "error": "payment_verification_failed",
+                "failure_stage": details["stage"],
+                "failure_reason": details["reason"],
+                "detail": details["raw"],
+                "message": "Provided payment is invalid or settlement failed. Create a new payment and retry.",
             }
         tx_hash = str(settle_result.get("transaction", ""))
         tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
         return {
-            "status_code": 200,
             "status": "paid",
             "recharge_status": "success",
             "message": (
@@ -488,12 +526,10 @@ async def recharge(
             "settlement": settle_result,
         }
     return {
-        "status_code": 402,
-        "headers": {PAYMENT_REQUIRED_HEADER: _encode_payment_payload(challenge)},
-        "body": challenge,
-        "payment_url": f"http://{settings.host}:{settings.port}/x402/recharge",
-        "retry_hint": "Retry the same MCP tool call with PAYMENT-SIGNATURE header.",
-        "message": "Pay with an x402 client, then retry your protected business request.",
+        "status": "payment_required",
+        "message": "Payment required. Call this tool through MCP HTTP /mcp to receive standard x402 402 headers.",
+        "x402": challenge,
+        "retry_hint": "Retry the same MCP tool call with PAYMENT-SIGNATURE header after payment.",
     }
 
 
@@ -540,13 +576,16 @@ async def x402_recharge(request) -> JSONResponse:
     try:
         settle_result = await _settle_with_facilitator(payment_signature, challenge)
     except Exception as exc:
+        details = _payment_failure_details(exc)
         return JSONResponse(
             content={
-                "error": f"payment verification failed: {exc}",
-                "message": "Payment invalid or not settled. Retry payment with a valid x402 signature.",
+                "error": "payment_verification_failed",
+                "failure_stage": details["stage"],
+                "failure_reason": details["reason"],
+                "detail": details["raw"],
+                "message": "Provided payment is invalid or settlement failed. Create a new payment and retry.",
             },
-            status_code=402,
-            headers={PAYMENT_REQUIRED_HEADER: _encode_payment_payload(challenge)},
+            status_code=400,
         )
 
     tx_hash = str(settle_result.get("transaction", ""))

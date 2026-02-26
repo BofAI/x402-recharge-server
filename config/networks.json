@@ -48,7 +48,7 @@
     "ainftDepositAddress": "TAJJNMLYBxVUdNi6UrTspkkc7aCQPbYVUp",
     "ainftApiUrl": "https://chat-dev.ainft.com/webapi/",
     "ainftWebUrl": "https://chat-dev.ainft.com",
-    "erc8004Registry": "",
+    "erc8004Registry": "TDDk4vc69nzBCbsY4kfu7gw2jmvbinirj5",
     "tokens": {
       "TRX": {
         "symbol": "TRX",
