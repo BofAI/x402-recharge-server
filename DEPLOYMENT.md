@@ -36,10 +36,18 @@ Basic x402 challenge check:
 ```bash
 curl -i -X POST 'http://127.0.0.1:8000/mcp' \
   -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"recharge","arguments":{"amount":"1","token":"USDT"}}}'
+  --data '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}'
 ```
 
 Expected: `HTTP/1.1 402 Payment Required`.
+
+Basic TRX native instruction check:
+
+```bash
+curl -s -X POST 'http://127.0.0.1:8000/mcp' \
+  -H 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0","id":"trx","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1"}}}'
+```
 
 ## 4. Logs and Restart
 

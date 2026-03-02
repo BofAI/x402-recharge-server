@@ -18,7 +18,7 @@ Commands:
   restart   Restart running container
   logs      Follow service logs
   status    Show service status
-  smoke     Run MCP tools/list health check
+  smoke     Run MCP deposit availability check
 EOF
 }
 
@@ -42,12 +42,16 @@ ensure_env() {
 }
 
 smoke_test() {
-  curl -fsS "http://127.0.0.1:${PORT}/mcp" \
+  local tools
+  tools="$(curl -fsS "http://127.0.0.1:${PORT}/mcp" \
     -H 'content-type: application/json' \
     -H 'accept: application/json, text/event-stream' \
     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
-    | grep -q '"recharge"'
-  echo "smoke check passed: MCP tools/list includes recharge"
+  )"
+
+  echo "$tools" | grep -q '"ainft_pay_trc20"'
+  echo "$tools" | grep -q '"ainft_pay_trx"'
+  echo "smoke check passed: MCP tools/list includes ainft_pay_trc20 and ainft_pay_trx"
 }
 
 main() {

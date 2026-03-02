@@ -6,6 +6,7 @@ import logging
 import time
 import uuid
 import asyncio
+from enum import Enum
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
@@ -52,10 +53,25 @@ PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
 TRX_TXID_HEADER = "X-TRX-TXID"
-BILL_URL = "https://chat.ainft.com/purchase"
+BILL_URL = "https://chat-dev.ainft.com/purchase"
 
 _facilitator = FacilitatorClient(settings.x402_facilitator_url)
 _tron_addr = TronAddressConverter()
+
+
+def _build_trc20_enum() -> type[Enum]:
+    token_map = {
+        symbol: symbol
+        for symbol, cfg in network_config.tokens.items()
+        if symbol.upper() != "TRX" and cfg.get("address")
+    }
+    if not token_map:
+        raise RuntimeError("No TRC20 tokens configured for current network")
+    return Enum("TRC20Token", token_map, type=str)
+
+
+TRC20Token = _build_trc20_enum()
+DEFAULT_TRC20_TOKEN = "USDT" if "USDT" in TRC20Token.__members__ else next(iter(TRC20Token.__members__))
 
 
 def _encode_payment_payload(payload: dict[str, Any]) -> str:
@@ -98,7 +114,7 @@ def _to_smallest_unit(amount: str, decimals: int) -> int:
     return int(smallest)
 
 
-async def _build_recharge_challenge(amount: str, token: str, resource_url: str) -> dict[str, Any]:
+async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url: str) -> dict[str, Any]:
     token_symbol = token.upper().strip()
     token_cfg = network_config.get_token_info(token_symbol)
     if not token_cfg:
@@ -115,13 +131,12 @@ async def _build_recharge_challenge(amount: str, token: str, resource_url: str) 
         )
 
     if token_symbol == "TRX":
-        scheme = "exact"
-        asset = "TRX"
-    else:
-        scheme = "exact_permit"
-        asset = token_cfg.get("address")
-        if not asset:
-            raise ValueError(f"Token contract address missing in config: {token_symbol}")
+        raise ValueError("TRX native transfer must use tool: ainft_pay_trx")
+
+    scheme = "exact_permit"
+    asset = token_cfg.get("address")
+    if not asset:
+        raise ValueError(f"Token contract address missing in config: {token_symbol}")
 
     accept_item: dict[str, Any] = {
         "scheme": scheme,
@@ -131,20 +146,19 @@ async def _build_recharge_challenge(amount: str, token: str, resource_url: str) 
         "payTo": network_config.ainft_deposit_address,
     }
 
-    if scheme != "exact":
-        req = PaymentRequirements(
-            scheme=accept_item["scheme"],
-            network=accept_item["network"],
-            amount=accept_item["amount"],
-            asset=accept_item["asset"],
-            payTo=accept_item["payTo"],
-            maxTimeoutSeconds=3600,
-        )
-        fee_quotes = await _facilitator.fee_quote([req])
-        if fee_quotes:
-            fee = fee_quotes[0].fee.model_dump(by_alias=True)
-            fee.setdefault("facilitatorId", _facilitator.facilitator_id)
-            accept_item["extra"] = {"fee": fee}
+    req = PaymentRequirements(
+        scheme=accept_item["scheme"],
+        network=accept_item["network"],
+        amount=accept_item["amount"],
+        asset=accept_item["asset"],
+        payTo=accept_item["payTo"],
+        maxTimeoutSeconds=3600,
+    )
+    fee_quotes = await _facilitator.fee_quote([req])
+    if fee_quotes:
+        fee = fee_quotes[0].fee.model_dump(by_alias=True)
+        fee.setdefault("facilitatorId", _facilitator.facilitator_id)
+        accept_item["extra"] = {"fee": fee}
 
     challenge = {
         "x402Version": 2,
@@ -176,6 +190,49 @@ async def _build_recharge_challenge(amount: str, token: str, resource_url: str) 
         resource_url,
     )
     return challenge
+
+
+def _trx_amount_to_sun(amount: str) -> int:
+    trx_cfg = network_config.get_token_info("TRX")
+    if not trx_cfg:
+        raise ValueError("TRX config missing in network settings")
+    amount_sun = _to_smallest_unit(amount, int(trx_cfg["decimals"]))
+    minimum_sun = int(trx_cfg["minimum"])
+    if amount_sun < minimum_sun:
+        raise ValueError(
+            "Amount below minimum. "
+            f"token=TRX, minimum={minimum_sun} (smallest unit)."
+        )
+    return amount_sun
+
+
+def _build_success_payload(
+    *,
+    tx_hash: str,
+    token: str,
+    amount: str,
+    settlement: dict[str, Any],
+    mode: str,
+) -> dict[str, Any]:
+    tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
+    return {
+        "status": "paid",
+        "recharge_status": "success",
+        "mode": mode,
+        "message": (
+            f"Recharge successful. View your bill at {BILL_URL}. "
+            f"Transaction: {tx_url}"
+        ) if tx_url else f"Recharge successful. View your bill at {BILL_URL}",
+        "bill_url": BILL_URL,
+        "transaction_hash": tx_hash,
+        "transaction_url": tx_url,
+        "token": token.upper(),
+        "amount": amount,
+        "pay_to": network_config.ainft_deposit_address,
+        "network": network_id,
+        "verified": True,
+        "settlement": settlement,
+    }
 
 
 def _to_payment_requirements(challenge: dict[str, Any]) -> PaymentRequirements:
@@ -287,9 +344,9 @@ class MCPRecharge402Middleware:
 
         headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
         payment_signature = headers.get(PAYMENT_SIGNATURE_HEADER.lower())
-        trx_txid = headers.get(TRX_TXID_HEADER.lower())
 
         intercept = False
+        tool_name = ""
         amount = ""
         token = "USDT"
         rpc_id: Any = None
@@ -298,10 +355,12 @@ class MCPRecharge402Middleware:
             rpc_id = payload.get("id")
             params = payload.get("params") or {}
             arguments = params.get("arguments") or {}
-            if payload.get("method") == "tools/call" and params.get("name") == "recharge":
-                intercept = True
+            tool_name = str(params.get("name", ""))
+            if payload.get("method") == "tools/call" and tool_name in {"ainft_pay_trc20", "recharge"}:
                 amount = str(arguments.get("amount", ""))
                 token = str(arguments.get("token", "USDT"))
+                # recharge(token=TRX) goes through native trx tool flow, not x402 middleware.
+                intercept = token.upper().strip() != "TRX"
         except Exception:
             intercept = False
 
@@ -324,10 +383,10 @@ class MCPRecharge402Middleware:
                 ).encode("utf-8")
 
             try:
-                challenge = await _build_recharge_challenge(
+                challenge = await _build_trc20_recharge_challenge(
                     amount=amount,
                     token=token,
-                    resource_url="/mcp tools/call recharge",
+                    resource_url=f"/mcp tools/call {tool_name}",
                 )
             except Exception as exc:
                 fallback = _rpc_error(
@@ -346,52 +405,6 @@ class MCPRecharge402Middleware:
                 return
 
             if not payment_signature:
-                if token.upper().strip() == "TRX" and trx_txid:
-                    req = challenge["accepts"][0]
-                    ok, reason = await _verify_native_trx_transfer(
-                        txid=trx_txid,
-                        expected_to=req["payTo"],
-                        expected_amount_sun=int(req["amount"]),
-                    )
-                    if ok:
-                        tx_url = _tx_explorer_url(trx_txid)
-                        success = {
-                            "status": "paid",
-                            "recharge_status": "success",
-                            "message": (
-                                f"Recharge successful. View your bill at {BILL_URL}. "
-                                f"Transaction: {tx_url}"
-                            ),
-                            "bill_url": BILL_URL,
-                            "transaction_hash": trx_txid,
-                            "transaction_url": tx_url,
-                            "token": "TRX",
-                            "amount": amount,
-                            "pay_to": network_config.ainft_deposit_address,
-                            "network": network_id,
-                            "verified": True,
-                            "settlement": {
-                                "success": True,
-                                "transaction": trx_txid,
-                                "network": network_id,
-                                "mode": "native_trx_fallback",
-                            },
-                        }
-                        response_body = _rpc_result(success)
-                        await send(
-                            {
-                                "type": "http.response.start",
-                                "status": 200,
-                                "headers": [
-                                    (b"content-type", b"application/json"),
-                                    (PAYMENT_RESPONSE_HEADER.lower().encode("ascii"), _encode_payment_payload(success).encode("ascii")),
-                                ],
-                            }
-                        )
-                        await send({"type": "http.response.body", "body": response_body})
-                        return
-                    logger.warning("TRX fallback tx verify failed: %s txid=%s", reason, trx_txid)
-
                 response_body = _rpc_error(
                     code=-32002,
                     message="Payment Required",
@@ -413,24 +426,13 @@ class MCPRecharge402Middleware:
             try:
                 settle_result = await _settle_with_facilitator(payment_signature, challenge)
                 tx_hash = str(settle_result.get("transaction", ""))
-                tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
-                success = {
-                    "status": "paid",
-                    "recharge_status": "success",
-                    "message": (
-                        f"Recharge successful. View your bill at {BILL_URL}. "
-                        f"Transaction: {tx_url}"
-                    ) if tx_url else f"Recharge successful. View your bill at {BILL_URL}",
-                    "bill_url": BILL_URL,
-                    "transaction_hash": tx_hash,
-                    "transaction_url": tx_url,
-                    "token": token.upper(),
-                    "amount": amount,
-                    "pay_to": network_config.ainft_deposit_address,
-                    "network": network_id,
-                    "verified": True,
-                    "settlement": settle_result,
-                }
+                success = _build_success_payload(
+                    tx_hash=tx_hash,
+                    token=token,
+                    amount=amount,
+                    settlement=settle_result,
+                    mode="trc20_x402",
+                )
                 response_body = _rpc_result(success)
                 await send(
                     {
@@ -475,12 +477,12 @@ class MCPRecharge402Middleware:
 
 
 @mcp.tool()
-async def recharge(
+async def ainft_pay_trc20(
     amount: str,
-    token: str = "USDT",
+    token: TRC20Token = TRC20Token[DEFAULT_TRC20_TOKEN],
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    """Recharge tool for AINFT.
+    """TRC20 recharge tool for AINFT (x402 required).
 
     Note: real x402 HTTP 402/headers are enforced by MCPRecharge402Middleware.
     """
@@ -488,10 +490,12 @@ async def recharge(
     if ctx and ctx.request_context.request is not None:
         payment_signature = ctx.request_context.request.headers.get(PAYMENT_SIGNATURE_HEADER)
 
-    challenge = await _build_recharge_challenge(
+    token_symbol = token.value
+
+    challenge = await _build_trc20_recharge_challenge(
         amount=amount,
-        token=token,
-        resource_url="/mcp tools/call recharge",
+        token=token_symbol,
+        resource_url="/mcp tools/call ainft_pay_trc20",
     )
     if payment_signature:
         try:
@@ -507,24 +511,13 @@ async def recharge(
                 "message": "Provided payment is invalid or settlement failed. Create a new payment and retry.",
             }
         tx_hash = str(settle_result.get("transaction", ""))
-        tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
-        return {
-            "status": "paid",
-            "recharge_status": "success",
-            "message": (
-                f"Recharge successful. View your bill at {BILL_URL}. "
-                f"Transaction: {tx_url}"
-            ) if tx_url else f"Recharge successful. View your bill at {BILL_URL}",
-            "bill_url": BILL_URL,
-            "transaction_hash": tx_hash,
-            "transaction_url": tx_url,
-            "token": token.upper(),
-            "amount": amount,
-            "pay_to": network_config.ainft_deposit_address,
-            "network": network_id,
-            "verified": True,
-            "settlement": settle_result,
-        }
+        return _build_success_payload(
+            tx_hash=tx_hash,
+            token=token_symbol,
+            amount=amount,
+            settlement=settle_result,
+            mode="trc20_x402",
+        )
     return {
         "status": "payment_required",
         "message": "Payment required. Call this tool through MCP HTTP /mcp to receive standard x402 402 headers.",
@@ -534,14 +527,92 @@ async def recharge(
 
 
 @mcp.tool()
-def get_balance(account_id: str = "") -> dict[str, str]:
-    """Return AINFT balance query entry information."""
+async def ainft_pay_trx(
+    amount: str,
+    txid: str = "",
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """TRX native transfer recharge tool (no x402)."""
+    header_txid = ""
+    if ctx and ctx.request_context.request is not None:
+        header_txid = ctx.request_context.request.headers.get(TRX_TXID_HEADER, "")
+    effective_txid = (txid or header_txid).strip()
+    amount_sun = _trx_amount_to_sun(amount)
+
+    if not effective_txid:
+        return {
+            "status": "payment_required_native",
+            "mode": "trx_native",
+            "message": "Send a native TRX transfer, then call this tool again with txid.",
+            "transfer": {
+                "network": network_id,
+                "token": "TRX",
+                "amount": amount,
+                "amount_sun": str(amount_sun),
+                "to": network_config.ainft_deposit_address,
+            },
+            "retry_hint": "Call ainft_pay_trx with txid=<transaction hash> (or header X-TRX-TXID).",
+        }
+
+    ok, reason = await _verify_native_trx_transfer(
+        txid=effective_txid,
+        expected_to=network_config.ainft_deposit_address,
+        expected_amount_sun=amount_sun,
+    )
+    if not ok:
+        return {
+            "status": "payment_verification_failed",
+            "mode": "trx_native",
+            "error": "payment_verification_failed",
+            "failure_reason": reason,
+            "message": "Native TRX transfer verification failed. Please check txid and amount, then retry.",
+        }
+
+    return _build_success_payload(
+        tx_hash=effective_txid,
+        token="TRX",
+        amount=amount,
+        settlement={
+            "success": True,
+            "transaction": effective_txid,
+            "network": network_id,
+            "mode": "native_trx",
+        },
+        mode="trx_native",
+    )
+
+
+@mcp.tool()
+async def recharge(
+    amount: str,
+    token: str = "USDT",
+    txid: str = "",
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """Deprecated compatibility alias. Use ainft_pay_trc20 / ainft_pay_trx instead."""
+    if token.upper().strip() == "TRX":
+        return await ainft_pay_trx(amount=amount, txid=txid, ctx=ctx)
+    token_symbol = token.upper().strip()
+    if token_symbol not in TRC20Token.__members__:
+        supported = ", ".join(TRC20Token.__members__.keys())
+        return {
+            "status": "invalid_token",
+            "message": f"Unsupported TRC20 token: {token_symbol}. Supported: {supported}",
+        }
+    return await ainft_pay_trc20(amount=amount, token=TRC20Token[token_symbol], ctx=ctx)
+
+
+@mcp.tool()
+def get_balance(account_id: str = "") -> dict[str, Any]:
+    """Deprecated in server; moved to local ainft-skill."""
     return {
         "account_id": account_id,
-        "status": "redirect",
-        "message": "Query balance from AINFT directly.",
-        "ainft_web_url": network_config.ainft_web_url,
-        "ainft_api_url": network_config.ainft_api_url,
+        "status": "moved_to_skill",
+        "message": "This query is handled in local ainft-skill using user API key.",
+        "ainft_skill": {
+            "queries": ["balance", "quota"],
+            "auth": "Authorization: Bearer <AINFT_API_KEY>",
+        },
     }
 
 
@@ -556,8 +627,17 @@ async def x402_recharge(request) -> JSONResponse:
     token = str(payload.get("token", "USDT"))
     payment_signature = request.headers.get(PAYMENT_SIGNATURE_HEADER)
 
+    if token.upper().strip() == "TRX":
+        return JSONResponse(
+            content={
+                "error": "unsupported_via_x402",
+                "message": "TRX native transfer does not use x402. Use MCP tool ainft_pay_trx.",
+            },
+            status_code=400,
+        )
+
     if not payment_signature:
-        challenge = await _build_recharge_challenge(
+        challenge = await _build_trc20_recharge_challenge(
             amount=amount,
             token=token,
             resource_url=str(request.url),
@@ -568,7 +648,7 @@ async def x402_recharge(request) -> JSONResponse:
             headers={PAYMENT_REQUIRED_HEADER: _encode_payment_payload(challenge)},
         )
 
-    challenge = await _build_recharge_challenge(
+    challenge = await _build_trc20_recharge_challenge(
         amount=amount,
         token=token,
         resource_url=str(request.url),
@@ -589,29 +669,24 @@ async def x402_recharge(request) -> JSONResponse:
         )
 
     tx_hash = str(settle_result.get("transaction", ""))
-    tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
-    success = {
-        "status": "paid",
-        "recharge_status": "success",
-        "message": (
-            f"Recharge successful. View your bill at {BILL_URL}. "
-            f"Transaction: {tx_url}"
-        ) if tx_url else f"Recharge successful. View your bill at {BILL_URL}",
-        "bill_url": BILL_URL,
-        "transaction_hash": tx_hash,
-        "transaction_url": tx_url,
-        "token": token.upper(),
-        "amount": amount,
-        "pay_to": network_config.ainft_deposit_address,
-        "network": network_id,
-        "verified": True,
-        "settlement": settle_result,
-    }
+    success = _build_success_payload(
+        tx_hash=tx_hash,
+        token=token,
+        amount=amount,
+        settlement=settle_result,
+        mode="trc20_x402",
+    )
     return JSONResponse(
         content=success,
         status_code=200,
         headers={PAYMENT_RESPONSE_HEADER: _encode_payment_payload(success)},
     )
+
+
+@mcp.custom_route("/x402/trc20/recharge", methods=["POST"])
+async def x402_trc20_recharge(request) -> JSONResponse:
+    """Alias route for explicit TRC20 x402 payment flow."""
+    return await x402_recharge(request)
 
 
 if __name__ == "__main__":
@@ -621,9 +696,10 @@ if __name__ == "__main__":
     logger.info("AINFT Account Manager MCP Server Starting")
     logger.info("Network: %s", network_config.name)
     logger.info("AINFT Deposit Address: %s", network_config.ainft_deposit_address)
-    logger.info("Tools: recharge, get_balance")
+    logger.info("Tools: ainft_pay_trc20, ainft_pay_trx, recharge(compat), get_balance(redirect)")
     logger.info("MCP Streamable HTTP Endpoint: http://%s:%s/mcp", settings.host, settings.port)
     logger.info("x402 HTTP Endpoint: http://%s:%s/x402/recharge", settings.host, settings.port)
+    logger.info("x402 TRC20 HTTP Endpoint: http://%s:%s/x402/trc20/recharge", settings.host, settings.port)
     logger.info("=" * 60)
 
     app = MCPRecharge402Middleware(mcp.streamable_http_app())
