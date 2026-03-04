@@ -8,10 +8,10 @@ services:
     env_file:
       - .env
     environment:
-      NETWORK: mainnet
-      HOST: 0.0.0.0
-      PORT: 8000
-      LOG_LEVEL: info
+      NETWORK: ${NETWORK:-mainnet}
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "8000:8000"
     healthcheck:
