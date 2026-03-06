@@ -32,6 +32,53 @@ AI Agents call top-up tools via [MCP](https://modelcontextprotocol.io/). For TRC
 | TRC20 token | `ainft_pay_trc20` | x402 | Automatic 402 challenge → sign → settle |
 | Native TRX | `ainft_pay_trx` | On-chain verify | Agent transfers TRX, then submits txid |
 
+## MCP Server
+
+Production endpoint:
+
+```
+https://ainft-agent.bankofai.io/mcp
+```
+
+### Connect from AI Agents
+
+**Claude Desktop / Claude Code / Cursor:**
+
+```json
+{
+  "mcpServers": {
+    "ainft-merchant-agent": {
+      "url": "https://ainft-agent.bankofai.io/mcp"
+    }
+  }
+}
+```
+
+**Antigravity:**
+
+```json
+{
+  "mcpServers": {
+    "ainft-merchant-agent": {
+      "serverUrl": "https://ainft-agent.bankofai.io/mcp"
+    }
+  }
+}
+```
+
+**OpenCode:**
+
+```json
+{
+  "mcp": {
+    "ainft-merchant-agent": {
+      "type": "remote",
+      "url": "https://ainft-agent.bankofai.io/mcp"
+    }
+  }
+}
+```
+
 ## Quick Start
 
 ```bash
@@ -45,7 +92,7 @@ pip install -r requirements.txt
 python server.py
 ```
 
-MCP endpoint available at `http://0.0.0.0:8000/mcp`.
+Local endpoint: `http://0.0.0.0:8000/mcp`.
 
 ### Docker
 
