@@ -1,0 +1,72 @@
+{
+  "mainnet": {
+    "name": "TRON Mainnet",
+    "rpcUrl": "https://api.trongrid.io",
+    "explorer": "https://tronscan.org",
+    "chainId": "728126428",
+    "ainftDepositAddress": "TNxh1UDWbzN8gMgfKQCSTjbB7Ugg7EuBDY",
+    "ainftApiUrl": "https://chat-dev.ainft.com/webapi/",
+    "ainftWebUrl": "https://chat-dev.ainft.com",
+    "erc8004Registry": "TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy",
+    "tokens": {
+      "TRX": {
+        "symbol": "TRX",
+        "decimals": 6,
+        "minimum": "1000000"
+      },
+      "USDT": {
+        "symbol": "USDT",
+        "address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+        "decimals": 6,
+        "minimum": "1000000"
+      },
+      "USDD": {
+        "symbol": "USDD",
+        "address": "TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn",
+        "decimals": 18,
+        "minimum": "1000000000000000000"
+      },
+      "USDC": {
+        "symbol": "USDC",
+        "address": "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
+        "decimals": 6,
+        "minimum": "1000000"
+      },
+      "NFT": {
+        "symbol": "NFT",
+        "address": "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9",
+        "decimals": 6,
+        "minimum": "100000000000"
+      }
+    }
+  },
+  "nile": {
+    "name": "TRON Nile",
+    "rpcUrl": "https://nile.trongrid.io",
+    "explorer": "https://nile.tronscan.org",
+    "chainId": "3448148188",
+    "ainftDepositAddress": "TAJJNMLYBxVUdNi6UrTspkkc7aCQPbYVUp",
+    "ainftApiUrl": "https://chat-dev.ainft.com/webapi/",
+    "ainftWebUrl": "https://chat-dev.ainft.com",
+    "erc8004Registry": "TDDk4vc69nzBCbsY4kfu7gw2jmvbinirj5",
+    "tokens": {
+      "TRX": {
+        "symbol": "TRX",
+        "decimals": 6,
+        "minimum": "1000000"
+      },
+      "USDT": {
+        "symbol": "USDT",
+        "address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+        "decimals": 6,
+        "minimum": "1000000"
+      },
+      "USDD": {
+        "symbol": "USDD",
+        "address": "TGjgvdTWWrybVLaVeFqSyVqJQWjxqRYbaK",
+        "decimals": 18,
+        "minimum": "1000000000000000000"
+      }
+    }
+  }
+}
