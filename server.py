@@ -48,25 +48,32 @@ mcp = FastMCP(
     port=settings.port,
 )
 
-network_id = f"tron:{settings.network}"
+if network_config.chain_family == "tron":
+    network_id = f"tron:{settings.network}"
+elif network_config.chain_family == "eip155":
+    network_id = f"eip155:{network_config.chain_id}"
+else:
+    raise RuntimeError(f"Unsupported chain family: {network_config.chain_family}")
+
 PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
 TRX_TXID_HEADER = "X-TRX-TXID"
-BILL_URL = "https://chat-dev.ainft.com/purchase"
+BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
 
 _facilitator = FacilitatorClient(settings.x402_facilitator_url)
 _tron_addr = TronAddressConverter()
 
 
 def _build_trc20_enum() -> type[Enum]:
+    native_symbol = "TRX" if network_config.chain_family == "tron" else "BNB"
     token_map = {
         symbol: symbol
         for symbol, cfg in network_config.tokens.items()
-        if symbol.upper() != "TRX" and cfg.get("address")
+        if symbol.upper() != native_symbol and cfg.get("address")
     }
     if not token_map:
-        raise RuntimeError("No TRC20 tokens configured for current network")
+        raise RuntimeError("No x402 token contracts configured for current network")
     return Enum("TRC20Token", token_map, type=str)
 
 
@@ -94,8 +101,9 @@ def _payment_failure_details(exc: Exception) -> dict[str, str]:
 
 def _tx_explorer_url(tx_hash: str) -> str:
     base = network_config.explorer.rstrip("/")
-    # TRON explorers commonly support /#/transaction/<txid>
-    return f"{base}/#/transaction/{tx_hash}"
+    if network_config.chain_family == "tron":
+        return f"{base}/#/transaction/{tx_hash}"
+    return f"{base}/tx/{tx_hash}"
 
 
 def _to_smallest_unit(amount: str, decimals: int) -> int:
@@ -206,6 +214,20 @@ def _trx_amount_to_sun(amount: str) -> int:
     return amount_sun
 
 
+def _bnb_amount_to_wei(amount: str) -> int:
+    bnb_cfg = network_config.get_token_info("BNB")
+    if not bnb_cfg:
+        raise ValueError("BNB config missing in network settings")
+    amount_wei = _to_smallest_unit(amount, int(bnb_cfg["decimals"]))
+    minimum_wei = int(bnb_cfg["minimum"])
+    if amount_wei < minimum_wei:
+        raise ValueError(
+            "Amount below minimum. "
+            f"token=BNB, minimum={minimum_wei} (smallest unit)."
+        )
+    return amount_wei
+
+
 def _build_success_payload(
     *,
     tx_hash: str,
@@ -269,6 +291,22 @@ async def _tron_rpc_post(endpoint: str, payload: dict[str, Any]) -> dict[str, An
         return resp.json() if resp.content else {}
 
 
+async def _evm_rpc_call(method: str, params: list[Any]) -> Any:
+    payload = {
+        "jsonrpc": "2.0",
+        "id": int(time.time() * 1000),
+        "method": method,
+        "params": params,
+    }
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        resp = await client.post(network_config.rpc_url, json=payload)
+        resp.raise_for_status()
+        body = resp.json() if resp.content else {}
+    if body.get("error"):
+        raise ValueError(str(body["error"]))
+    return body.get("result")
+
+
 async def _verify_native_trx_transfer(
     txid: str, expected_to: str, expected_amount_sun: int
 ) -> tuple[bool, str]:
@@ -316,6 +354,143 @@ async def _verify_native_trx_transfer(
         return False, f"verify_error:{exc}"
 
 
+async def _verify_native_bnb_transfer(
+    txid: str, expected_to: str, expected_amount_wei: int
+) -> tuple[bool, str]:
+    if not txid:
+        return False, "missing_txid"
+    try:
+        tx = await _evm_rpc_call("eth_getTransactionByHash", [txid])
+        if not tx:
+            return False, "tx_not_found"
+
+        to_addr = str(tx.get("to") or "").lower()
+        expected_to_lower = expected_to.lower()
+        if to_addr != expected_to_lower:
+            return False, f"to_mismatch:{to_addr}"
+
+        value_hex = str(tx.get("value") or "0x0")
+        amount = int(value_hex, 16)
+        if amount < expected_amount_wei:
+            return False, f"amount_too_small:{amount}"
+
+        data = str(tx.get("input") or "0x")
+        if data not in {"0x", "0x0", ""}:
+            return False, "unsupported_contract_call"
+
+        for _ in range(8):
+            receipt = await _evm_rpc_call("eth_getTransactionReceipt", [txid])
+            if receipt:
+                status_hex = str(receipt.get("status") or "")
+                if status_hex == "0x1":
+                    return True, "ok_confirmed"
+                if status_hex in {"0x0", "0"}:
+                    return False, "receipt_not_success"
+            await asyncio.sleep(1)
+
+        return False, "receipt_missing"
+    except Exception as exc:
+        return False, f"verify_error:{exc}"
+
+
+async def _confirm_topup_completion(tx_hash: str) -> dict[str, Any]:
+    merchant_id = (settings.ainft_merchant_id or "").strip()
+    merchant_key = (settings.ainft_merchant_key or "").strip()
+    if not merchant_id or not merchant_key:
+        return {
+            "enabled": False,
+            "status": "skipped",
+            "reason": "missing_ainft_merchant_credentials",
+        }
+
+    base = network_config.ainft_api_url.rstrip("/")
+    endpoint = (settings.ainft_topup_confirm_url or f"{base}/m/credit/recharge").strip()
+    confirm_chain = (network_config.confirm_chain or "").strip()
+    if not confirm_chain:
+        return {
+            "enabled": False,
+            "status": "skipped",
+            "reason": "confirmation_chain_not_configured",
+        }
+    timeout_sec = max(1.0, settings.ainft_topup_confirm_timeout_ms / 1000.0)
+    retries = max(1, int(settings.ainft_topup_confirm_retries))
+    interval_sec = max(0.0, settings.ainft_topup_confirm_interval_ms / 1000.0)
+
+    headers = {
+        "content-type": "application/json",
+        "accept": "application/json",
+        "X-Merchant-Id": merchant_id,
+        "X-Merchant-Key": merchant_key,
+    }
+    payload = {
+        "chain": confirm_chain,
+        "tx_hash": tx_hash,
+    }
+
+    last_http_status: int | None = None
+    last_body: Any = None
+    async with httpx.AsyncClient(timeout=timeout_sec) as client:
+        for i in range(retries):
+            try:
+                resp = await client.post(endpoint, json=payload, headers=headers)
+                last_http_status = resp.status_code
+                text = resp.text
+                try:
+                    body = resp.json() if text else {}
+                except Exception:
+                    body = {"raw": text}
+                last_body = body
+
+                if resp.status_code == 200 and isinstance(body, dict):
+                    status = body.get("status")
+                    if status == "paid":
+                        return {
+                            "enabled": True,
+                            "status": "confirmed",
+                            "http_status": resp.status_code,
+                            "attempt": i + 1,
+                            "endpoint": endpoint,
+                            "result": body,
+                        }
+                    if status == "pending":
+                        last_body = body
+
+                if i < retries - 1:
+                    await asyncio.sleep(interval_sec)
+            except Exception as exc:
+                last_body = {"error": str(exc)}
+                if i < retries - 1:
+                    await asyncio.sleep(interval_sec)
+
+    return {
+        "enabled": True,
+        "status": "not_confirmed",
+        "endpoint": endpoint,
+        "attempts": retries,
+        "http_status": last_http_status,
+        "last_response": last_body,
+    }
+
+
+async def _build_success_payload_with_confirmation(
+    *,
+    tx_hash: str,
+    token: str,
+    amount: str,
+    settlement: dict[str, Any],
+    mode: str,
+) -> dict[str, Any]:
+    payload = _build_success_payload(
+        tx_hash=tx_hash,
+        token=token,
+        amount=amount,
+        settlement=settlement,
+        mode=mode,
+    )
+    payload["topup_confirmation"] = await _confirm_topup_completion(tx_hash)
+    return payload
+
+
 class MCPRecharge402Middleware:
     """ASGI middleware: return real HTTP 402 for unpaid MCP recharge calls."""
 
@@ -356,11 +531,11 @@ class MCPRecharge402Middleware:
             params = payload.get("params") or {}
             arguments = params.get("arguments") or {}
             tool_name = str(params.get("name", ""))
-            if payload.get("method") == "tools/call" and tool_name in {"ainft_pay_trc20", "recharge"}:
+            if payload.get("method") == "tools/call" and tool_name in {"ainft_pay_trc20", "ainft_pay_erc20", "recharge"}:
                 amount = str(arguments.get("amount", ""))
                 token = str(arguments.get("token", "USDT"))
-                # recharge(token=TRX) goes through native trx tool flow, not x402 middleware.
-                intercept = token.upper().strip() != "TRX"
+                # native coin flows do not go through x402 middleware.
+                intercept = token.upper().strip() not in {"TRX", "BNB"}
         except Exception:
             intercept = False
 
@@ -426,7 +601,7 @@ class MCPRecharge402Middleware:
             try:
                 settle_result = await _settle_with_facilitator(payment_signature, challenge)
                 tx_hash = str(settle_result.get("transaction", ""))
-                success = _build_success_payload(
+                success = await _build_success_payload_with_confirmation(
                     tx_hash=tx_hash,
                     token=token,
                     amount=amount,
@@ -482,8 +657,9 @@ async def ainft_pay_trc20(
     token: TRC20Token = TRC20Token[DEFAULT_TRC20_TOKEN],
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    """TRC20 recharge tool for AINFT (x402 required).
+    """Token recharge tool for AINFT over x402.
 
+    TRON networks use TRC20 assets; EVM networks should prefer `ainft_pay_erc20`.
     Note: real x402 HTTP 402/headers are enforced by MCPRecharge402Middleware.
     """
     payment_signature = None
@@ -511,7 +687,7 @@ async def ainft_pay_trc20(
                 "message": "Provided payment is invalid or settlement failed. Create a new payment and retry.",
             }
         tx_hash = str(settle_result.get("transaction", ""))
-        return _build_success_payload(
+        return await _build_success_payload_with_confirmation(
             tx_hash=tx_hash,
             token=token_symbol,
             amount=amount,
@@ -527,12 +703,32 @@ async def ainft_pay_trc20(
 
 
 @mcp.tool()
+async def ainft_pay_erc20(
+    amount: str,
+    token: TRC20Token = TRC20Token[DEFAULT_TRC20_TOKEN],
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """ERC20 recharge tool for AINFT over x402 (EVM networks)."""
+    if network_config.chain_family != "eip155":
+        return {
+            "status": "unsupported_network",
+            "message": f"Current network {settings.network} is not an EVM network.",
+        }
+    return await ainft_pay_trc20(amount=amount, token=token, ctx=ctx)
+
+
+@mcp.tool()
 async def ainft_pay_trx(
     amount: str,
     txid: str = "",
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     """TRX native transfer recharge tool (no x402)."""
+    if network_config.chain_family != "tron":
+        return {
+            "status": "unsupported_network",
+            "message": f"Current network {settings.network} is not a TRON network.",
+        }
     header_txid = ""
     if ctx and ctx.request_context.request is not None:
         header_txid = ctx.request_context.request.headers.get(TRX_TXID_HEADER, "")
@@ -568,7 +764,7 @@ async def ainft_pay_trx(
             "message": "Native TRX transfer verification failed. Please check txid and amount, then retry.",
         }
 
-    return _build_success_payload(
+    return await _build_success_payload_with_confirmation(
         tx_hash=effective_txid,
         token="TRX",
         amount=amount,
@@ -583,6 +779,68 @@ async def ainft_pay_trx(
 
 
 @mcp.tool()
+async def ainft_pay_bnb(
+    amount: str,
+    txid: str = "",
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    """BNB native transfer recharge tool (no x402)."""
+    if network_config.chain_family != "eip155":
+        return {
+            "status": "unsupported_network",
+            "message": f"Current network {settings.network} is not a BSC/EVM network.",
+        }
+
+    header_txid = ""
+    if ctx and ctx.request_context.request is not None:
+        header_txid = ctx.request_context.request.headers.get(TRX_TXID_HEADER, "")
+    effective_txid = (txid or header_txid).strip()
+    amount_wei = _bnb_amount_to_wei(amount)
+
+    if not effective_txid:
+        return {
+            "status": "payment_required_native",
+            "mode": "bnb_native",
+            "message": "Send a native BNB transfer, then call this tool again with txid.",
+            "transfer": {
+                "network": network_id,
+                "token": "BNB",
+                "amount": amount,
+                "amount_wei": str(amount_wei),
+                "to": network_config.ainft_deposit_address,
+            },
+            "retry_hint": "Call ainft_pay_bnb with txid=<transaction hash>.",
+        }
+
+    ok, reason = await _verify_native_bnb_transfer(
+        txid=effective_txid,
+        expected_to=network_config.ainft_deposit_address,
+        expected_amount_wei=amount_wei,
+    )
+    if not ok:
+        return {
+            "status": "payment_verification_failed",
+            "mode": "bnb_native",
+            "error": "payment_verification_failed",
+            "failure_reason": reason,
+            "message": "Native BNB transfer verification failed. Please check txid and amount, then retry.",
+        }
+
+    return await _build_success_payload_with_confirmation(
+        tx_hash=effective_txid,
+        token="BNB",
+        amount=amount,
+        settlement={
+            "success": True,
+            "transaction": effective_txid,
+            "network": network_id,
+            "mode": "native_bnb",
+        },
+        mode="bnb_native",
+    )
+
+
+@mcp.tool()
 async def recharge(
     amount: str,
     token: str = "USDT",
@@ -590,15 +848,19 @@ async def recharge(
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Deprecated compatibility alias. Use ainft_pay_trc20 / ainft_pay_trx instead."""
-    if token.upper().strip() == "TRX":
-        return await ainft_pay_trx(amount=amount, txid=txid, ctx=ctx)
     token_symbol = token.upper().strip()
+    if token_symbol == "TRX":
+        return await ainft_pay_trx(amount=amount, txid=txid, ctx=ctx)
+    if token_symbol == "BNB":
+        return await ainft_pay_bnb(amount=amount, txid=txid, ctx=ctx)
     if token_symbol not in TRC20Token.__members__:
         supported = ", ".join(TRC20Token.__members__.keys())
         return {
             "status": "invalid_token",
-            "message": f"Unsupported TRC20 token: {token_symbol}. Supported: {supported}",
+            "message": f"Unsupported token: {token_symbol}. Supported x402 tokens: {supported}",
         }
+    if network_config.chain_family == "eip155":
+        return await ainft_pay_erc20(amount=amount, token=TRC20Token[token_symbol], ctx=ctx)
     return await ainft_pay_trc20(amount=amount, token=TRC20Token[token_symbol], ctx=ctx)
 
 
@@ -627,11 +889,11 @@ async def x402_recharge(request) -> JSONResponse:
     token = str(payload.get("token", "USDT"))
     payment_signature = request.headers.get(PAYMENT_SIGNATURE_HEADER)
 
-    if token.upper().strip() == "TRX":
+    if token.upper().strip() in {"TRX", "BNB"}:
         return JSONResponse(
             content={
                 "error": "unsupported_via_x402",
-                "message": "TRX native transfer does not use x402. Use MCP tool ainft_pay_trx.",
+                "message": "Native coin transfer does not use x402. Use MCP tool ainft_pay_trx or ainft_pay_bnb.",
             },
             status_code=400,
         )
@@ -669,7 +931,7 @@ async def x402_recharge(request) -> JSONResponse:
         )
 
     tx_hash = str(settle_result.get("transaction", ""))
-    success = _build_success_payload(
+    success = await _build_success_payload_with_confirmation(
         tx_hash=tx_hash,
         token=token,
         amount=amount,

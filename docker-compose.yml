@@ -8,6 +8,9 @@ services:
     env_file:
       - .env
     environment:
+      AINFT_ENV: ${AINFT_ENV:-dev}
+      AINFT_API_URL: ${AINFT_API_URL:-}
+      AINFT_WEB_URL: ${AINFT_WEB_URL:-}
       NETWORK: ${NETWORK:-mainnet}
       HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-8000}

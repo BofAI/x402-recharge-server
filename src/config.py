@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # Network
     network: str = Field(default="mainnet", description="Network: mainnet")
     tron_rpc_url: str = Field(default="https://api.trongrid.io")
+    ainft_env: str = Field(default="dev", description="AINFT environment: dev|prod")
+    ainft_api_url: Optional[str] = Field(default=None)
+    ainft_web_url: Optional[str] = Field(default=None)
     
     # Server
     host: str = Field(default="0.0.0.0")
@@ -32,6 +35,14 @@ class Settings(BaseSettings):
     # x402 settlement facilitator
     x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
 
+    # AINFT merchant API (post-topup confirmation)
+    ainft_merchant_id: Optional[str] = Field(default=None)
+    ainft_merchant_key: Optional[str] = Field(default=None)
+    ainft_topup_confirm_url: Optional[str] = Field(default=None)
+    ainft_topup_confirm_timeout_ms: int = Field(default=12000)
+    ainft_topup_confirm_retries: int = Field(default=4)
+    ainft_topup_confirm_interval_ms: int = Field(default=1500)
+
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -40,8 +51,9 @@ class Settings(BaseSettings):
 class NetworkConfig:
     """Network configuration loader"""
     
-    def __init__(self, network: str = "mainnet"):
+    def __init__(self, network: str = "mainnet", settings_obj: Optional[Settings] = None):
         self.network = network
+        self.settings = settings_obj or settings
         self._config = self._load_config()
     
     def _load_config(self) -> Dict[str, Any]:
@@ -62,6 +74,10 @@ class NetworkConfig:
     @property
     def rpc_url(self) -> str:
         return self._config["rpcUrl"]
+
+    @property
+    def chain_family(self) -> str:
+        return self._config["chainFamily"]
     
     @property
     def explorer(self) -> str:
@@ -70,6 +86,10 @@ class NetworkConfig:
     @property
     def chain_id(self) -> str:
         return self._config["chainId"]
+
+    @property
+    def confirm_chain(self) -> str:
+        return self._config.get("confirmChain", "")
     
     @property
     def ainft_deposit_address(self) -> str:
@@ -77,11 +97,19 @@ class NetworkConfig:
     
     @property
     def ainft_api_url(self) -> str:
-        return self._config["ainftApiUrl"]
+        if self.settings.ainft_api_url:
+            return self.settings.ainft_api_url.rstrip("/") + "/"
+        if self.settings.ainft_env.lower() == "prod":
+            return "https://chat.ainft.com/webapi/"
+        return "https://chat-dev.ainft.com/webapi/"
     
     @property
     def ainft_web_url(self) -> str:
-        return self._config["ainftWebUrl"]
+        if self.settings.ainft_web_url:
+            return self.settings.ainft_web_url.rstrip("/")
+        if self.settings.ainft_env.lower() == "prod":
+            return "https://chat.ainft.com"
+        return "https://chat-dev.ainft.com"
     
     @property
     def erc8004_registry(self) -> str:
@@ -107,4 +135,4 @@ class NetworkConfig:
 
 # Global settings instance
 settings = Settings()
-network_config = NetworkConfig(settings.network)
+network_config = NetworkConfig(settings.network, settings)
