@@ -50,8 +50,8 @@ smoke_test() {
   )"
 
   echo "$tools" | grep -q '"ainft_pay_trc20"'
-  echo "$tools" | grep -q '"ainft_pay_trx"'
-  echo "smoke check passed: MCP tools/list includes ainft_pay_trc20 and ainft_pay_trx"
+  echo "$tools" | grep -q '"ainft_pay_erc20"'
+  echo "smoke check passed: MCP tools/list includes ainft_pay_trc20 and ainft_pay_erc20"
 }
 
 main() {

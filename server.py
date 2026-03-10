@@ -58,7 +58,6 @@ else:
 PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
-TRX_TXID_HEADER = "X-TRX-TXID"
 BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
 
 _facilitator = FacilitatorClient(settings.x402_facilitator_url)
@@ -138,8 +137,8 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
             f"token={token_symbol}, minimum={minimum_smallest} (smallest unit)."
         )
 
-    if token_symbol == "TRX":
-        raise ValueError("TRX native transfer must use tool: ainft_pay_trx")
+    if token_symbol in {"TRX", "BNB"}:
+        raise ValueError(f"Native coin {token_symbol} is not supported by this MCP service")
 
     scheme = "exact_permit"
     asset = token_cfg.get("address")
@@ -200,34 +199,6 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
     return challenge
 
 
-def _trx_amount_to_sun(amount: str) -> int:
-    trx_cfg = network_config.get_token_info("TRX")
-    if not trx_cfg:
-        raise ValueError("TRX config missing in network settings")
-    amount_sun = _to_smallest_unit(amount, int(trx_cfg["decimals"]))
-    minimum_sun = int(trx_cfg["minimum"])
-    if amount_sun < minimum_sun:
-        raise ValueError(
-            "Amount below minimum. "
-            f"token=TRX, minimum={minimum_sun} (smallest unit)."
-        )
-    return amount_sun
-
-
-def _bnb_amount_to_wei(amount: str) -> int:
-    bnb_cfg = network_config.get_token_info("BNB")
-    if not bnb_cfg:
-        raise ValueError("BNB config missing in network settings")
-    amount_wei = _to_smallest_unit(amount, int(bnb_cfg["decimals"]))
-    minimum_wei = int(bnb_cfg["minimum"])
-    if amount_wei < minimum_wei:
-        raise ValueError(
-            "Amount below minimum. "
-            f"token=BNB, minimum={minimum_wei} (smallest unit)."
-        )
-    return amount_wei
-
-
 def _build_success_payload(
     *,
     tx_hash: str,
@@ -281,116 +252,6 @@ async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, 
     if not settle_result.success:
         raise ValueError(f"facilitator settle failed: {settle_result.error_reason}")
     return settle_result.model_dump(by_alias=True)
-
-
-async def _tron_rpc_post(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
-    url = f"{network_config.rpc_url.rstrip('/')}{endpoint}"
-    async with httpx.AsyncClient(timeout=12.0) as client:
-        resp = await client.post(url, json=payload)
-        resp.raise_for_status()
-        return resp.json() if resp.content else {}
-
-
-async def _evm_rpc_call(method: str, params: list[Any]) -> Any:
-    payload = {
-        "jsonrpc": "2.0",
-        "id": int(time.time() * 1000),
-        "method": method,
-        "params": params,
-    }
-    async with httpx.AsyncClient(timeout=12.0) as client:
-        resp = await client.post(network_config.rpc_url, json=payload)
-        resp.raise_for_status()
-        body = resp.json() if resp.content else {}
-    if body.get("error"):
-        raise ValueError(str(body["error"]))
-    return body.get("result")
-
-
-async def _verify_native_trx_transfer(
-    txid: str, expected_to: str, expected_amount_sun: int
-) -> tuple[bool, str]:
-    if not txid:
-        return False, "missing_txid"
-    try:
-        tx = await _tron_rpc_post("/wallet/gettransactionbyid", {"value": txid})
-        if not tx or not tx.get("txID"):
-            return False, "tx_not_found"
-
-        contracts = ((tx.get("raw_data") or {}).get("contract") or [])
-        if not contracts:
-            return False, "missing_contract"
-        c0 = contracts[0] or {}
-        if c0.get("type") != "TransferContract":
-            return False, f"unsupported_contract_type:{c0.get('type')}"
-
-        value = ((c0.get("parameter") or {}).get("value") or {})
-        to_hex = str(value.get("to_address", ""))
-        amount = int(value.get("amount", 0))
-        to_base58 = _tron_addr.normalize(to_hex) if to_hex else ""
-
-        if to_base58 != expected_to:
-            return False, f"to_mismatch:{to_base58}"
-        if amount < expected_amount_sun:
-            return False, f"amount_too_small:{amount}"
-
-        # Poll for confirmation briefly; TronGrid may lag immediately after broadcast.
-        for _ in range(8):
-            tx_info = await _tron_rpc_post("/wallet/gettransactioninfobyid", {"value": txid})
-            receipt = tx_info.get("receipt") or {}
-            result = receipt.get("result")
-            if result == "SUCCESS":
-                return True, "ok_confirmed"
-            if result and result != "SUCCESS":
-                return False, f"receipt_not_success:{result}"
-            await asyncio.sleep(1)
-
-        # Fallback: accept broadcast-level success when receipt is not yet indexed.
-        ret = (tx.get("ret") or [{}])[0]
-        if ret.get("contractRet") == "SUCCESS":
-            return True, "ok_broadcast_success"
-        return False, "receipt_missing"
-    except Exception as exc:
-        return False, f"verify_error:{exc}"
-
-
-async def _verify_native_bnb_transfer(
-    txid: str, expected_to: str, expected_amount_wei: int
-) -> tuple[bool, str]:
-    if not txid:
-        return False, "missing_txid"
-    try:
-        tx = await _evm_rpc_call("eth_getTransactionByHash", [txid])
-        if not tx:
-            return False, "tx_not_found"
-
-        to_addr = str(tx.get("to") or "").lower()
-        expected_to_lower = expected_to.lower()
-        if to_addr != expected_to_lower:
-            return False, f"to_mismatch:{to_addr}"
-
-        value_hex = str(tx.get("value") or "0x0")
-        amount = int(value_hex, 16)
-        if amount < expected_amount_wei:
-            return False, f"amount_too_small:{amount}"
-
-        data = str(tx.get("input") or "0x")
-        if data not in {"0x", "0x0", ""}:
-            return False, "unsupported_contract_call"
-
-        for _ in range(8):
-            receipt = await _evm_rpc_call("eth_getTransactionReceipt", [txid])
-            if receipt:
-                status_hex = str(receipt.get("status") or "")
-                if status_hex == "0x1":
-                    return True, "ok_confirmed"
-                if status_hex in {"0x0", "0"}:
-                    return False, "receipt_not_success"
-            await asyncio.sleep(1)
-
-        return False, "receipt_missing"
-    except Exception as exc:
-        return False, f"verify_error:{exc}"
 
 
 async def _confirm_topup_completion(tx_hash: str) -> dict[str, Any]:
@@ -718,146 +579,22 @@ async def ainft_pay_erc20(
 
 
 @mcp.tool()
-async def ainft_pay_trx(
-    amount: str,
-    txid: str = "",
-    ctx: Context | None = None,
-) -> dict[str, Any]:
-    """TRX native transfer recharge tool (no x402)."""
-    if network_config.chain_family != "tron":
-        return {
-            "status": "unsupported_network",
-            "message": f"Current network {settings.network} is not a TRON network.",
-        }
-    header_txid = ""
-    if ctx and ctx.request_context.request is not None:
-        header_txid = ctx.request_context.request.headers.get(TRX_TXID_HEADER, "")
-    effective_txid = (txid or header_txid).strip()
-    amount_sun = _trx_amount_to_sun(amount)
-
-    if not effective_txid:
-        return {
-            "status": "payment_required_native",
-            "mode": "trx_native",
-            "message": "Send a native TRX transfer, then call this tool again with txid.",
-            "transfer": {
-                "network": network_id,
-                "token": "TRX",
-                "amount": amount,
-                "amount_sun": str(amount_sun),
-                "to": network_config.ainft_deposit_address,
-            },
-            "retry_hint": "Call ainft_pay_trx with txid=<transaction hash> (or header X-TRX-TXID).",
-        }
-
-    ok, reason = await _verify_native_trx_transfer(
-        txid=effective_txid,
-        expected_to=network_config.ainft_deposit_address,
-        expected_amount_sun=amount_sun,
-    )
-    if not ok:
-        return {
-            "status": "payment_verification_failed",
-            "mode": "trx_native",
-            "error": "payment_verification_failed",
-            "failure_reason": reason,
-            "message": "Native TRX transfer verification failed. Please check txid and amount, then retry.",
-        }
-
-    return await _build_success_payload_with_confirmation(
-        tx_hash=effective_txid,
-        token="TRX",
-        amount=amount,
-        settlement={
-            "success": True,
-            "transaction": effective_txid,
-            "network": network_id,
-            "mode": "native_trx",
-        },
-        mode="trx_native",
-    )
-
-
-@mcp.tool()
-async def ainft_pay_bnb(
-    amount: str,
-    txid: str = "",
-    ctx: Context | None = None,
-) -> dict[str, Any]:
-    """BNB native transfer recharge tool (no x402)."""
-    if network_config.chain_family != "eip155":
-        return {
-            "status": "unsupported_network",
-            "message": f"Current network {settings.network} is not a BSC/EVM network.",
-        }
-
-    header_txid = ""
-    if ctx and ctx.request_context.request is not None:
-        header_txid = ctx.request_context.request.headers.get(TRX_TXID_HEADER, "")
-    effective_txid = (txid or header_txid).strip()
-    amount_wei = _bnb_amount_to_wei(amount)
-
-    if not effective_txid:
-        return {
-            "status": "payment_required_native",
-            "mode": "bnb_native",
-            "message": "Send a native BNB transfer, then call this tool again with txid.",
-            "transfer": {
-                "network": network_id,
-                "token": "BNB",
-                "amount": amount,
-                "amount_wei": str(amount_wei),
-                "to": network_config.ainft_deposit_address,
-            },
-            "retry_hint": "Call ainft_pay_bnb with txid=<transaction hash>.",
-        }
-
-    ok, reason = await _verify_native_bnb_transfer(
-        txid=effective_txid,
-        expected_to=network_config.ainft_deposit_address,
-        expected_amount_wei=amount_wei,
-    )
-    if not ok:
-        return {
-            "status": "payment_verification_failed",
-            "mode": "bnb_native",
-            "error": "payment_verification_failed",
-            "failure_reason": reason,
-            "message": "Native BNB transfer verification failed. Please check txid and amount, then retry.",
-        }
-
-    return await _build_success_payload_with_confirmation(
-        tx_hash=effective_txid,
-        token="BNB",
-        amount=amount,
-        settlement={
-            "success": True,
-            "transaction": effective_txid,
-            "network": network_id,
-            "mode": "native_bnb",
-        },
-        mode="bnb_native",
-    )
-
-
-@mcp.tool()
 async def recharge(
     amount: str,
     token: str = "USDT",
     txid: str = "",
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    """Deprecated compatibility alias. Use ainft_pay_trc20 / ainft_pay_trx instead."""
+    """Deprecated compatibility alias. Use ainft_pay_trc20 / ainft_pay_erc20 instead."""
     token_symbol = token.upper().strip()
-    if token_symbol == "TRX":
-        return await ainft_pay_trx(amount=amount, txid=txid, ctx=ctx)
-    if token_symbol == "BNB":
-        return await ainft_pay_bnb(amount=amount, txid=txid, ctx=ctx)
     if token_symbol not in TRC20Token.__members__:
         supported = ", ".join(TRC20Token.__members__.keys())
         return {
             "status": "invalid_token",
-            "message": f"Unsupported token: {token_symbol}. Supported x402 tokens: {supported}",
+            "message": (
+                f"Unsupported token: {token_symbol}. "
+                f"Supported x402 tokens on this network: {supported}"
+            ),
         }
     if network_config.chain_family == "eip155":
         return await ainft_pay_erc20(amount=amount, token=TRC20Token[token_symbol], ctx=ctx)
@@ -893,7 +630,7 @@ async def x402_recharge(request) -> JSONResponse:
         return JSONResponse(
             content={
                 "error": "unsupported_via_x402",
-                "message": "Native coin transfer does not use x402. Use MCP tool ainft_pay_trx or ainft_pay_bnb.",
+                "message": "Native TRX and BNB recharge flows are disabled. Use supported x402 tokens only.",
             },
             status_code=400,
         )
@@ -958,7 +695,7 @@ if __name__ == "__main__":
     logger.info("AINFT Account Manager MCP Server Starting")
     logger.info("Network: %s", network_config.name)
     logger.info("AINFT Deposit Address: %s", network_config.ainft_deposit_address)
-    logger.info("Tools: ainft_pay_trc20, ainft_pay_trx, recharge(compat), get_balance(redirect)")
+    logger.info("Tools: ainft_pay_trc20, ainft_pay_erc20, recharge(compat), get_balance(redirect)")
     logger.info("MCP Streamable HTTP Endpoint: http://%s:%s/mcp", settings.host, settings.port)
     logger.info("x402 HTTP Endpoint: http://%s:%s/x402/recharge", settings.host, settings.port)
     logger.info("x402 TRC20 HTTP Endpoint: http://%s:%s/x402/trc20/recharge", settings.host, settings.port)

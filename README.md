@@ -4,15 +4,12 @@ Python MCP payee agent for AINFT top-up.
 Server-side responsibilities:
 - `ainft_pay_trc20`: token recharge via x402 on configured network
 - `ainft_pay_erc20`: explicit ERC20 recharge via x402 on BSC/EVM
-- `ainft_pay_trx`: TRX native transfer verification (no x402)
-- `ainft_pay_bnb`: BNB native transfer verification (no x402)
 
 ## Current Status
 
 - External environment model: `ainft dev` / `ainft prod`
 - Default local dev run uses `chat-dev` API with mainnet recharge addresses
-- Verified TRON native flow on local MCP
-- Verified BSC mainnet step-1 flows: `eip155:56` x402 challenge + native BNB instruction
+- Verified x402 token flows on local MCP
 - `shasta` is intentionally not supported in current build
 
 ## Environment Model
@@ -45,18 +42,10 @@ The codebase still keeps runtime keys such as `mainnet`, `nile`, `bsc`, and `bsc
   - paid retry returns `200` on successful verify/settle
 - `ainft_pay_erc20(amount, token="USDT")`
   - explicit alias for EVM/BSC x402 recharge
-- `ainft_pay_trx(amount, txid="")`
-  - does not use x402
-  - first call returns native transfer instructions
-  - second call (with `txid` or `X-TRX-TXID`) verifies transfer and returns success
-- `ainft_pay_bnb(amount, txid="")`
-  - does not use x402
-  - first call returns native BNB transfer instructions
-  - second call verifies the on-chain transfer and returns success
 - `recharge(amount, token="USDT", txid="")`
   - deprecated compatibility alias:
-    - `token != TRX` -> forwards to `ainft_pay_trc20`
-    - `token == TRX` -> forwards to `ainft_pay_trx`
+    - forwards to `ainft_pay_trc20` on TRON
+    - forwards to `ainft_pay_erc20` on BSC/EVM
 - `get_balance(account_id="")`
   - deprecated on server side; moved to local `ainft-skill`
 
@@ -96,24 +85,6 @@ node ../skills/x402-payment/dist/x402_invoke.js \
 ```
 
 Expected: final response `status: 200` with settlement transaction hash.
-
-## TRX Native Verification Example
-
-1) Get transfer instructions:
-
-```bash
-curl -s -X POST 'http://127.0.0.1:8000/mcp' \
-  -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"trx-1","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1"}}}'
-```
-
-2) After sending TRX on-chain, verify with txid:
-
-```bash
-curl -s -X POST 'http://127.0.0.1:8000/mcp' \
-  -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"trx-2","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1","txid":"<TRX_TXID>"}}}'
-```
 
 ## Configuration
 

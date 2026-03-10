@@ -68,22 +68,6 @@ curl -i -X POST 'http://127.0.0.1:8000/mcp' \
 
 Expected: `HTTP/1.1 402 Payment Required`.
 
-Basic BNB native instruction check:
-
-```bash
-curl -s -X POST 'http://127.0.0.1:8000/mcp' \
-  -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"bnb","method":"tools/call","params":{"name":"ainft_pay_bnb","arguments":{"amount":"0.001"}}}'
-```
-
-Basic TRX native instruction check:
-
-```bash
-curl -s -X POST 'http://127.0.0.1:8000/mcp' \
-  -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"trx","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1"}}}'
-```
-
 ## 4. Logs and Restart
 
 ```bash

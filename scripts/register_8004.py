@@ -112,7 +112,7 @@ def main() -> int:
         print("Registering new agent")
         agent = sdk.createAgent(
             name="AINFT Merchant Agent",
-            description="MCP payee-side recharge provider for AINFT on TRON (TRC20 via x402 + TRX native).",
+            description="MCP payee-side recharge provider for AINFT token top-up over x402.",
             image="https://chat.ainft.com/favicon.ico",
         )
         agent.setMCP(args.mcp_endpoint, auto_fetch=True)
