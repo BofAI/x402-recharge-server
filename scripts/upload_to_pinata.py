@@ -7,8 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-
-import httpx
+from typing import Any
 
 from _8004_common import load_env
 
@@ -86,7 +85,7 @@ def validate_file(file_path: Path) -> Path:
     return resolved
 
 
-def test_auth(client: httpx.Client, jwt: str) -> None:
+def test_auth(client: Any, jwt: str) -> None:
     response = client.get(
         PINATA_TEST_AUTH_URL,
         headers={"Authorization": f"Bearer {jwt}", "Accept": "application/json"},
@@ -96,7 +95,7 @@ def test_auth(client: httpx.Client, jwt: str) -> None:
 
 def upload_file(
     *,
-    client: httpx.Client,
+    client: Any,
     jwt: str,
     file_path: Path,
     upload_name: str,
@@ -166,6 +165,13 @@ def print_result(result: dict[str, object], fmt: str, file_path: Path, network: 
 
 def main() -> int:
     args = parse_args()
+    try:
+        import httpx
+    except ImportError as exc:
+        raise SystemExit(
+            "Error: httpx is not installed. Install dependencies with: pip install -r requirements.txt"
+        ) from exc
+
     jwt = load_pinata_jwt()
     keyvalues = parse_keyvalues(args.keyvalues)
     file_path = validate_file(Path(args.file))
