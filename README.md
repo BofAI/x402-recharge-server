@@ -150,4 +150,10 @@ Use Docker runbook in [DEPLOYMENT.md](DEPLOYMENT.md).
 ## Registration
 
 ERC-8004 registration is a separate step from runtime startup.  
+Recommended flow:
+- render bootstrap registration JSON
+- register the new agent and capture `agent_id`
+- render final registration JSON with `agent_id`
+- update the existing agent URI
+
 See [docs/REGISTRATION.md](docs/REGISTRATION.md).
