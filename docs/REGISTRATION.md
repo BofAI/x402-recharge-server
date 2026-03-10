@@ -5,6 +5,7 @@ It is independent from runtime service startup.
 
 ## Prerequisites
 
+- Start from `.env.registration.example` if you want a minimal registration-only env template.
 - Running MCP service is optional, but recommended for validation.
 - `AGENT_OPERATOR_KEY` is set in `.env`.
 - A public metadata URI can be hosted on HTTPS or IPFS.

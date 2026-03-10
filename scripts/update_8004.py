@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import argparse
 
-from bankofai.sdk_8004.core.transaction_handle import TransactionHandle
-
 from _8004_common import build_sdk, load_operator_key, resolve_agent_id, resolve_network
 
 
@@ -43,6 +41,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    try:
+        from bankofai.sdk_8004.core.transaction_handle import TransactionHandle
+    except ImportError as exc:
+        raise SystemExit(
+            "bankofai-8004-sdk is not installed. "
+            "Install the local SDK checkout with: pip install -e ../8004-sdk/python"
+        ) from exc
+
     private_key = load_operator_key()
     agent_id = resolve_agent_id(args.agent_id)
     network, rpc_url = resolve_network(args.network, args.rpc_url)
