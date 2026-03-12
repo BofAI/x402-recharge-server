@@ -1,19 +1,55 @@
 # ERC-8004 Registration Guide
 
-This document is only for on-chain discovery registration.
-It is independent from runtime service startup.
+This guide covers on-chain discovery registration only. It is separate from starting the merchant MCP service.
 
-## Prerequisites
+## Overview
 
-- Start from `.env.registration.example` if you want a minimal registration-only env template.
-- Running MCP service is optional, but recommended for validation.
-- `AGENT_OPERATOR_KEY` is set in `.env`.
-- A public metadata URI can be hosted on HTTPS or IPFS.
-- Optional but recommended: `PINATA_JWT` is set in `.env` so the repo can upload metadata to Pinata directly.
+The recommended registration flow has two phases:
 
-## 1. Render Bootstrap Registration JSON
+1. Publish bootstrap metadata and create a new agent on-chain.
+2. Publish final metadata with the real `agent_id`, then update the existing agent URI.
 
-Render a bootstrap file with no `agentId` yet:
+This split keeps first registration simple and gives you a clean final metadata document after the chain-assigned identifier is known.
+
+## What You Need
+
+- Python `>=3.11`
+- a virtual environment
+- runtime dependencies from `requirements.txt`
+- the ERC-8004 SDK
+- `AGENT_OPERATOR_KEY` in `.env`
+- a public metadata URI hosted on IPFS or HTTPS
+- optional but recommended: `PINATA_JWT` in `.env` for direct Pinata uploads
+
+If you want a minimal registration-only template, start from `.env.registration.example`.
+
+Example setup:
+
+```bash
+cd ainft-merchant-agent
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install git+https://github.com/BofAI/8004-sdk.git#subdirectory=python
+```
+
+## Required Environment Variables
+
+At minimum, make sure `.env` includes:
+
+- `NETWORK=mainnet|nile`
+- `AGENT_OPERATOR_KEY=<operator private key>`
+- `AINFT_PUBLIC_MCP_ENDPOINT=https://your-domain/mcp`
+
+Optional but common:
+
+- `PINATA_JWT=<pinata jwt>`
+- `AINFT_WEB_URL=https://chat.ainft.com`
+- `ERC8004_AGENT_ID=<existing agent id for updates>`
+
+## Step 1: Render Bootstrap Metadata
+
+Render bootstrap metadata without an embedded `agent_id`:
 
 ```bash
 cd ainft-merchant-agent
@@ -22,51 +58,55 @@ python3 scripts/render_registration.py \
   --output docs/ainft-merchant-registration.bootstrap.json
 ```
 
-Then upload that JSON file to IPFS or HTTPS.
+The bootstrap JSON should already contain:
 
-With Pinata:
+- the public MCP endpoint
+- the published tool list
+- trust and active status fields
+
+## Step 2: Upload Bootstrap Metadata
+
+Upload the bootstrap JSON to IPFS or HTTPS.
+
+Pinata example:
 
 ```bash
 cd ainft-merchant-agent
 python3 scripts/upload_to_pinata.py docs/ainft-merchant-registration.bootstrap.json
 ```
 
-Or if you want only the URI for shell piping:
+If you only want the URI:
 
 ```bash
 cd ainft-merchant-agent
 python3 scripts/upload_to_pinata.py docs/ainft-merchant-registration.bootstrap.json --format uri
 ```
 
-Example output URI:
+Typical output:
 
-- `https://your-domain/ainft-merchant-registration-v1.json`
 - `ipfs://<cid>`
+- `https://your-domain/ainft-merchant-registration-bootstrap.json`
 
-The bootstrap file should contain your public MCP endpoint (`https://.../mcp`) and tool list.
+## Step 3: Register the Agent
 
-## 2. First Registration
+Use the bootstrap URI to create a new on-chain agent:
 
 ```bash
 cd ainft-merchant-agent
 python3 scripts/register_8004.py --uri ipfs://<bootstrap-cid>
 ```
 
-If you used the Pinata helper above, the URI will usually be `ipfs://<bootstrap-cid>` instead of `ipfs://<bootstrap-cid>/registration.json`.
-
-Output includes:
+Expected output includes:
 
 - `tx_hash`
 - `agent_id`
 - `agent_uri`
 
-Save `agent_id` for future updates.
+Save the returned `agent_id`. You will need it for all later updates. It is also reasonable to write it back into `.env` as `ERC8004_AGENT_ID=<agent_id>`.
 
-If you want, write it back into `.env` as `ERC8004_AGENT_ID=<agent_id>`.
+## Step 4: Render Final Metadata
 
-## 3. Render Final Registration JSON
-
-Now render the final registration file with the real `agent_id` embedded:
+Once you have the real `agent_id`, render the final metadata:
 
 ```bash
 cd ainft-merchant-agent
@@ -76,37 +116,43 @@ python3 scripts/render_registration.py \
   --output docs/ainft-merchant-registration.final.json
 ```
 
-Upload that file to IPFS or HTTPS and keep the new URI.
+This final document is the version you should keep as the canonical public registration payload.
 
-With Pinata:
+## Step 5: Upload Final Metadata
+
+Upload the final JSON and keep the new URI.
+
+Pinata example:
 
 ```bash
 cd ainft-merchant-agent
 python3 scripts/upload_to_pinata.py docs/ainft-merchant-registration.final.json
 ```
 
-## 4. Update Existing Agent URI
+## Step 6: Update the Existing Agent URI
+
+Point the existing agent to the final metadata:
 
 ```bash
 cd ainft-merchant-agent
 python3 scripts/update_8004.py --agent-id <agent_id> --uri ipfs://<final-cid>
 ```
 
-If `ERC8004_AGENT_ID` is already set in `.env`, `--agent-id` can be omitted.
+If `ERC8004_AGENT_ID` already exists in `.env`, `--agent-id` can be omitted.
 
-## 5. Rollback
+## Rollback
 
-If a bad metadata URI was published, immediately update again with the last known good URI:
+If you publish a bad metadata URI, immediately update the agent back to the last known good URI:
 
 ```bash
 python3 scripts/update_8004.py --agent-id <agent_id> --uri <previous_good_uri>
 ```
 
-## Notes
+## Operational Notes
 
-- Runtime service never needs `AGENT_OPERATOR_KEY`.
-- Keep operator private keys out of Docker image and source control.
+- Runtime startup never needs `AGENT_OPERATOR_KEY`.
+- Keep operator keys and Pinata credentials out of Docker images and source control.
 - `upload_to_pinata.py` uploads a single JSON file and returns `ipfs://<cid>`.
 - If you manually upload a folder instead of a single file, `ipfs://<cid>/registration.json` is also valid.
-- Registration helpers currently target TRON `mainnet` and `nile` metadata layouts.
-- `register_8004.py` still accepts TRON `shasta` RPC settings for raw chain write operations, but the service itself is not documented as supporting shasta runtime.
+- Current registration helpers target the TRON registration flow used by this repository.
+- `register_8004.py` can still accept `shasta` RPC settings for raw chain calls, but this repository is not documented as a shasta runtime deployment target.
