@@ -18,21 +18,24 @@ from starlette.responses import JSONResponse
 from src.config import network_config, settings
 
 try:
-    from bankofai.x402.address import TronAddressConverter
-    from bankofai.x402.encoding import decode_payment_payload
-    from bankofai.x402.facilitator import FacilitatorClient
-    from bankofai.x402.types import PaymentPayload, PaymentRequirements
+    from bankofai.x402.http import (
+        HTTPFacilitatorClient,
+        FacilitatorConfig,
+        decode_payment_signature_header,
+    )
+    from bankofai.x402.schemas import PaymentRequirements
 except ImportError:
     import sys
-    from pathlib import Path
 
     fallback = Path(__file__).resolve().parent.parent / "x402" / "python" / "x402" / "src"
     if fallback.exists():
         sys.path.insert(0, str(fallback))
-    from bankofai.x402.address import TronAddressConverter
-    from bankofai.x402.encoding import decode_payment_payload
-    from bankofai.x402.facilitator import FacilitatorClient
-    from bankofai.x402.types import PaymentPayload, PaymentRequirements
+    from bankofai.x402.http import (
+        HTTPFacilitatorClient,
+        FacilitatorConfig,
+        decode_payment_signature_header,
+    )
+    from bankofai.x402.schemas import PaymentRequirements
 
 
 logging.basicConfig(
@@ -60,8 +63,7 @@ PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
 BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
 
-_facilitator = FacilitatorClient(settings.x402_facilitator_url)
-_tron_addr = TronAddressConverter()
+_facilitator = HTTPFacilitatorClient(FacilitatorConfig(url=settings.x402_facilitator_url))
 
 
 def _build_trc20_enum() -> type[Enum]:
@@ -153,20 +155,6 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
         "payTo": network_config.ainft_deposit_address,
     }
 
-    req = PaymentRequirements(
-        scheme=accept_item["scheme"],
-        network=accept_item["network"],
-        amount=accept_item["amount"],
-        asset=accept_item["asset"],
-        payTo=accept_item["payTo"],
-        maxTimeoutSeconds=3600,
-    )
-    fee_quotes = await _facilitator.fee_quote([req])
-    if fee_quotes:
-        fee = fee_quotes[0].fee.model_dump(by_alias=True)
-        fee.setdefault("facilitatorId", _facilitator.facilitator_id)
-        accept_item["extra"] = {"fee": fee}
-
     challenge = {
         "x402Version": 2,
         "error": "Payment Required",
@@ -242,7 +230,7 @@ def _to_payment_requirements(challenge: dict[str, Any]) -> PaymentRequirements:
 
 async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, Any]) -> dict[str, Any]:
     requirements = _to_payment_requirements(challenge)
-    payload = decode_payment_payload(payment_signature, PaymentPayload)
+    payload = decode_payment_signature_header(payment_signature)
 
     verify_result = await _facilitator.verify(payload, requirements)
     if not verify_result.is_valid:

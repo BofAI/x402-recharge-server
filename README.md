@@ -102,13 +102,19 @@ curl -i -X POST 'http://127.0.0.1:8000/mcp' \
   --data '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}'
 ```
 
-Run a paid retry with the sample x402 client:
+Run a paid retry with the current x402 pay CLI.
+Install it first if needed:
 
 ```bash
-node ../skills/x402-payment/dist/x402_invoke.js \
-  --url http://127.0.0.1:8000/mcp \
-  --method POST \
-  --input '{"jsonrpc":"2.0","id":"pay-1","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}' \
+npm install -g @bankofai/x402-mcp
+```
+
+Then execute:
+
+```bash
+x402 pay http://127.0.0.1:8000/mcp \
+  -X POST \
+  -d '{"jsonrpc":"2.0","id":"pay-1","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}' \
   --network mainnet
 ```
 

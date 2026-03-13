@@ -30,6 +30,11 @@ ENV/
 .env
 .env.local
 
+# TypeScript demo/runtime artifacts
+ts/node_modules/
+ts/dist/
+ts/package-lock.json
+
 # Data
 data/
 *.json.bak

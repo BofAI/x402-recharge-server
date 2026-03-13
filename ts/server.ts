@@ -12,8 +12,8 @@ import crypto from "crypto";
 // Environment configurations
 const PORT = Number(process.env.PORT ?? 8000);
 const HOST = process.env.HOST ?? "0.0.0.0";
-const PAY_TO_ADDRESS = process.env.AINFT_DEPOSIT_ADDRESS ?? process.env.PAY_TO_ADDRESS;
-const BSC_PAY_TO_ADDRESS = process.env.BSC_PAY_TO ?? "0x0B5D66620843DBA7eeb6819043c54484e92B5bD4";
+const PAY_TO_ADDRESS = (process.env.AINFT_DEPOSIT_ADDRESS ?? process.env.PAY_TO_ADDRESS) as string;
+const BSC_PAY_TO_ADDRESS = (process.env.BSC_PAY_TO ?? "0x0B5D66620843DBA7eeb6819043c54484e92B5bD4") as string;
 const FACILITATOR_URL = process.env.X402_FACILITATOR_URL ?? "http://localhost:8011";
 
 if (!PAY_TO_ADDRESS) {
@@ -27,7 +27,7 @@ function getPayToAddress(network: string): string {
 
 // Map token symbols to contracts (Simplified for testnet/demo)
 const TRON_TOKENS: Record<string, string> = {
-    USDT: "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj", // Nile USDT
+    USDT: "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf", // Nile USDT
 };
 
 const BSC_TOKENS: Record<string, `0x${string}`> = {

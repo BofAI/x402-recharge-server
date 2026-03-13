@@ -10,12 +10,12 @@
         "build": "tsc"
     },
     "dependencies": {
-        "@bankofai/x402-core": "file:../../../../../../var/folders/0f/72lzrqsd7_dcw0_6_qdsyslc0000gn/T/tmp.zJe1InFNdq/stage/core/bankofai-x402-core-2.6.0.tgz",
-        "@bankofai/x402-evm": "file:../../../../../../var/folders/0f/72lzrqsd7_dcw0_6_qdsyslc0000gn/T/tmp.zJe1InFNdq/stage/evm/bankofai-x402-evm-2.6.0.tgz",
-        "@bankofai/x402-extensions": "file:../../../../../../var/folders/0f/72lzrqsd7_dcw0_6_qdsyslc0000gn/T/tmp.zJe1InFNdq/stage/extensions/bankofai-x402-extensions-2.6.0.tgz",
-        "@bankofai/x402-fetch": "file:../../../../../../var/folders/0f/72lzrqsd7_dcw0_6_qdsyslc0000gn/T/tmp.zJe1InFNdq/stage/fetch/bankofai-x402-fetch-2.6.0.tgz",
-        "@bankofai/x402-mcp": "file:../../../../../../var/folders/0f/72lzrqsd7_dcw0_6_qdsyslc0000gn/T/tmp.zJe1InFNdq/stage/mcp/bankofai-x402-mcp-2.6.0.tgz",
-        "@bankofai/x402-tron": "file:../../../../../../var/folders/0f/72lzrqsd7_dcw0_6_qdsyslc0000gn/T/tmp.zJe1InFNdq/stage/tron/bankofai-x402-tron-2.6.0.tgz",
+        "@bankofai/x402-core": "file:../../x402/typescript/packages/core",
+        "@bankofai/x402-evm": "file:../../x402/typescript/packages/mechanisms/evm",
+        "@bankofai/x402-extensions": "file:../../x402/typescript/packages/extensions",
+        "@bankofai/x402-fetch": "file:../../x402/typescript/packages/http/fetch",
+        "@bankofai/x402-mcp": "file:../../x402/typescript/packages/mcp",
+        "@bankofai/x402-tron": "file:../../x402/typescript/packages/mechanisms/tron",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "cors": "^2.8.6",
         "dotenv": "^16.6.1",
