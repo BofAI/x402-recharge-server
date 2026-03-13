@@ -63,6 +63,16 @@ The bootstrap JSON should already contain:
 - the public MCP endpoint
 - the published tool list
 - trust and active status fields
+- `image` / icon URL
+- `tags`
+- MCP payment metadata with `paymentProtocol: "x402"`
+
+Optional overrides:
+
+```bash
+export AINFT_REGISTRATION_IMAGE="ipfs://<cid>/logo.png"
+export AINFT_REGISTRATION_TAGS="ainft,mcp,x402,tron,bsc,payments"
+```
 
 ## Step 2: Upload Bootstrap Metadata
 

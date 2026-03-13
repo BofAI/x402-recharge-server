@@ -62,8 +62,21 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--image",
-        default="https://chat.ainft.com/favicon.ico",
-        help="Agent image URL",
+        "--icon",
+        dest="image",
+        default=(
+            os.getenv("AINFT_REGISTRATION_IMAGE", "").strip()
+            or "https://chat.ainft.com/favicon.ico"
+        ),
+        help="Agent image/icon URL (https://... or ipfs://...)",
+    )
+    parser.add_argument(
+        "--tags",
+        default=(
+            os.getenv("AINFT_REGISTRATION_TAGS", "").strip()
+            or "ainft,mcp,x402,tron,bsc,payments"
+        ),
+        help="Comma-separated registration tags",
     )
     return parser.parse_args()
 
@@ -74,6 +87,7 @@ def build_document(args: argparse.Namespace) -> dict[str, object]:
     mcp_endpoint = resolve_public_mcp_endpoint(args.mcp_endpoint)
     web_url = resolve_public_web_url(args.web_url)
     ainft_env = (os.getenv("AINFT_ENV", "prod").strip().lower() or "prod")
+    tags = [tag.strip() for tag in args.tags.split(",") if tag.strip()]
 
     registrations: list[dict[str, str]] = []
     if args.mode == "final":
@@ -92,6 +106,7 @@ def build_document(args: argparse.Namespace) -> dict[str, object]:
         "name": args.name,
         "description": args.description,
         "image": args.image,
+        "tags": tags,
         "services": [
             {
                 "name": "MCP",

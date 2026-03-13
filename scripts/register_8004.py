@@ -8,6 +8,7 @@ It only handles the first on-chain registration metadata write.
 from __future__ import annotations
 
 import argparse
+import os
 
 from _8004_common import (
     build_sdk,
@@ -63,7 +64,10 @@ def main() -> int:
     agent = sdk.createAgent(
         name="AINFT Merchant Agent",
         description="MCP payee-side recharge provider for AINFT token top-up over x402.",
-        image="https://chat.ainft.com/favicon.ico",
+        image=(
+            os.getenv("AINFT_REGISTRATION_IMAGE", "").strip()
+            or "https://chat.ainft.com/favicon.ico"
+        ),
     )
     agent.setMCP(mcp_endpoint, auto_fetch=True)
     agent.setTrust(reputation=True, cryptoEconomic=False)

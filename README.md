@@ -176,6 +176,15 @@ On-chain registration is a separate workflow from service startup:
 5. Upload the final metadata.
 6. Update the existing agent URI.
 
+The rendered registration metadata includes:
+- `image` / icon URL
+- `tags`
+- MCP payment metadata with `paymentProtocol: "x402"`
+
+You can override the defaults with:
+- `AINFT_REGISTRATION_IMAGE=https://...` or `ipfs://...`
+- `AINFT_REGISTRATION_TAGS=ainft,mcp,x402,tron,bsc,payments`
+
 See [docs/REGISTRATION.md](docs/REGISTRATION.md) for the complete flow.
 
 ## Security
