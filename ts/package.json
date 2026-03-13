@@ -15,7 +15,7 @@
         "@bankofai/x402-extensions": "file:../../x402/typescript/packages/extensions",
         "@bankofai/x402-fetch": "file:../../x402/typescript/packages/http/fetch",
         "@bankofai/x402-mcp": "file:../../x402/typescript/packages/mcp",
-        "@bankofai/x402-tvm": "file:../../x402/typescript/packages/mechanisms/tron",
+        "@bankofai/x402-tron": "file:../../x402/typescript/packages/mechanisms/tron",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "cors": "^2.8.6",
         "dotenv": "^16.6.1",

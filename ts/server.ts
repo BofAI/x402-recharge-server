@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { HTTPFacilitatorClient, x402ResourceServer } from "@bankofai/x402-core/server";
-import { ExactTronScheme } from "@bankofai/x402-tvm/exact/server";
+import { ExactTronScheme } from "@bankofai/x402-tron/exact/server";
 import { ExactEvmScheme } from "@bankofai/x402-evm/exact/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
