@@ -84,7 +84,7 @@ https://ainft-agent.bankofai.io/mcp
 git clone https://github.com/BofAI/ainft-merchant-agent.git
 cd ainft-merchant-agent
 
-cp .env.example .env        # Defaults to AINFT_ENV=prod for mainnet recharge
+cp .env.example .env
 
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
@@ -103,10 +103,9 @@ cp .env.example .env
 ./scripts/deploy.sh down     # Stop
 ```
 
-For production recharge on TRON mainnet, change `.env` before deploy:
+For production recharge on TRON mainnet, use:
 
 ```dotenv
-AINFT_ENV=prod
 HOST=0.0.0.0
 PORT=8000
 LOG_LEVEL=info
@@ -145,7 +144,6 @@ Copy `.env.example` to `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AINFT_ENV` | `prod` | `prod` for TRON mainnet deployment, `dev` only for local verification |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Listen port |
 | `LOG_LEVEL` | `info` | Log level |

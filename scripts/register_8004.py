@@ -52,8 +52,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--network",
-        default="",
-        help="Target network for registration metadata load/update (mainnet|nile|shasta).",
+        default="mainnet",
+        help="Target network for registration metadata load/update (mainnet only).",
     )
     parser.add_argument(
         "--rpc-url",
@@ -72,17 +72,14 @@ def main() -> int:
         print("Error: AGENT_OPERATOR_KEY is not set")
         return 1
 
-    ainft_env = os.getenv("AINFT_ENV", "prod").strip().lower() or "prod"
-    default_network = "nile" if ainft_env == "dev" else "mainnet"
-    network = (args.network or default_network).strip().lower() or default_network
+    network = (args.network or "mainnet").strip().lower() or "mainnet"
     default_rpc = {
         "mainnet": "https://api.trongrid.io",
-        "nile": "https://nile.trongrid.io",
         "shasta": "https://api.shasta.trongrid.io",
     }.get(network, "https://api.trongrid.io")
     rpc_url = (args.rpc_url or os.getenv("TRON_RPC_URL", "")).strip() or default_rpc
 
-    print(f"Using ainft_env={ainft_env}, network={network}, rpc_url={rpc_url}")
+    print(f"Using network={network}, rpc_url={rpc_url}")
 
     sdk = SDK(
         chainId=1,

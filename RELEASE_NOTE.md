@@ -12,7 +12,7 @@ AINFT Merchant Agent now exposes a single MCP top-up tool, `recharge`, and suppo
 
 **TRC20 Automatic Payment** — When an agent calls `recharge`, the service returns HTTP 402 with an x402 challenge. After the agent signs and retries, the service verifies and settles on-chain via the Facilitator. Fully automatic for x402-compatible clients.
 
-**Environment-Based Deployment** — Runtime configuration now uses `AINFT_ENV=dev|prod`. `dev` is for local verification, and `prod` is for TRON mainnet production recharge.
+**Mainnet Only** — Runtime configuration is fixed to TRON mainnet. The service no longer exposes a separate Nile / dev runtime path.
 
 ## Supported Mainnet Tokens
 

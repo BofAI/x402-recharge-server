@@ -11,8 +11,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings"""
 
-    # Environment
-    ainft_env: str = Field(default="prod", description="Environment: prod | dev")
+    # Network
+    network: str = Field(default="mainnet", description="Network: mainnet")
     tron_rpc_url: str = Field(default="")
     
     # Server
@@ -33,15 +33,6 @@ class Settings(BaseSettings):
     x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
     facilitator_api_key: str = Field(default="")
 
-    @property
-    def network(self) -> str:
-        env = self.ainft_env.lower().strip()
-        if env == "dev":
-            return "nile"
-        if env == "prod":
-            return "mainnet"
-        raise ValueError(f"Invalid AINFT_ENV: {self.ainft_env}. Expected: dev | prod")
-
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -51,7 +42,7 @@ class Settings(BaseSettings):
 class NetworkConfig:
     """Network configuration loader"""
     
-    def __init__(self, network: str = "nile"):
+    def __init__(self, network: str = "mainnet"):
         self.network = network
         self._config = self._load_config()
     

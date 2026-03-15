@@ -8,22 +8,8 @@ cd "$ROOT_DIR"
 SERVICE_NAME="ainft-merchant-agent"
 PORT="${PORT:-8000}"
 
-current_env() {
-  if [ -n "${AINFT_ENV:-}" ]; then
-    printf '%s\n' "$AINFT_ENV"
-    return
-  fi
-
-  if [ -f .env ]; then
-    local configured
-    configured="$(grep -E '^AINFT_ENV=' .env | tail -n 1 | cut -d '=' -f 2- || true)"
-    if [ -n "$configured" ]; then
-      printf '%s\n' "$configured"
-      return
-    fi
-  fi
-
-  printf 'prod\n'
+current_network() {
+  printf 'mainnet\n'
 }
 
 usage() {
@@ -84,7 +70,7 @@ main() {
   case "$cmd" in
     up)
       docker compose up -d --build
-      echo "service started: ${SERVICE_NAME} (env=$(current_env))"
+      echo "service started: ${SERVICE_NAME} (network=$(current_network))"
       ;;
     down)
       docker compose down
@@ -99,7 +85,7 @@ main() {
       ;;
     status)
       docker compose ps
-      echo "configured env: $(current_env)"
+      echo "configured network: $(current_network)"
       ;;
     smoke)
       smoke_test

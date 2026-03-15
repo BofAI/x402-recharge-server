@@ -9,7 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Consolidated MCP top-up interface to a single `recharge(amount, token)` tool
 - Restricted merchant-agent top-ups to supported TRC20 tokens only
 - Updated MCP middleware and smoke checks to target `recharge` only
-- Switched deployment configuration to `AINFT_ENV=dev|prod` with `dev -> Nile` and `prod -> Mainnet`
+- Runtime is now fixed to TRON mainnet only
 
 ### Removed
 
@@ -27,7 +27,6 @@ Initial release of AINFT Merchant Agent.
 - Native TRX top-up (`ainft_pay_trx`): on-chain transfer + txid verification
 - x402 middleware (`MCPRecharge402Middleware`): intercepts MCP calls and injects HTTP 402 flow
 - REST top-up endpoints: `/x402/recharge`, `/x402/trc20/recharge`
-- Multi-network support: mainnet and Nile testnet (driven by `config/networks.json`)
-- Token support: USDT, USDD, USDC, NFT (mainnet); USDT, USDD (Nile)
+- Token support: USDT, USDD, USDC, NFT (TRON mainnet)
 - ERC-8004 on-chain registration script (`scripts/register_8004.py`)
 - Docker deployment + one-command ops script (`scripts/deploy.sh`)

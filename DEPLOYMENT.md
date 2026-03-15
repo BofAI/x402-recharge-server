@@ -4,9 +4,7 @@
 
 - Docker 24+
 - Docker Compose v2
-- Decide target environment before deployment:
-  - `dev` for QA / Nile x402 test
-  - `prod` for production / TRON mainnet recharge
+- Target network is fixed to TRON mainnet.
 
 ## 1. Configure Environment
 
@@ -16,7 +14,6 @@ cp .env.example .env
 
 Required runtime values:
 
-- `AINFT_ENV=prod|dev`
 - `HOST=0.0.0.0`
 - `PORT=8000`
 - `LOG_LEVEL=info`
@@ -24,29 +21,19 @@ Required runtime values:
 
 Recommended presets:
 
-Production / mainnet:
+Runtime example:
 
 ```dotenv
-AINFT_ENV=prod
 HOST=0.0.0.0
 PORT=8000
 LOG_LEVEL=info
 FACILITATOR_API_KEY=MAIN_API_KEY
 ```
 
-Optional local test:
-
-```dotenv
-AINFT_ENV=dev
-HOST=0.0.0.0
-PORT=8000
-LOG_LEVEL=info
-```
-
 Notes:
 
-- The runtime selects chain, deposit address, explorer, and token contracts from `config/networks.json` based on `AINFT_ENV`.
-- Mainnet is the default. OP only needs to keep `AINFT_ENV=prod` in `.env`.
+- The runtime uses TRON mainnet only.
+- Deposit address, explorer, and supported token contracts are loaded from `config/networks.json`.
 
 ## 2. Deploy (Single Entry)
 
@@ -88,7 +75,6 @@ Expected: `HTTP/1.1 402 Payment Required`.
 
 ## Production Notes
 
-- Mainnet recharge deployment uses `AINFT_ENV=prod`.
 - After startup, confirm logs show `Network: TRON Mainnet`.
 - After startup, confirm MCP `tools/list` only exposes `recharge`.
 - Expose only MCP endpoint (`/mcp`) behind HTTPS reverse proxy (Nginx/Caddy/Traefik).
@@ -105,8 +91,7 @@ Expected: `HTTP/1.1 402 Payment Required`.
   - Confirm reverse proxy forwards `/mcp` and supports streaming responses.
   - Confirm TLS certificate is valid on public endpoint.
 - x402 payment does not complete:
-  - Confirm `AINFT_ENV` matches the expected environment (`dev` for QA, `prod` for production).
-  - Confirm payer wallet has the matching network token balance and TRX gas.
+  - Confirm payer wallet has mainnet token balance and TRX gas.
   - Confirm facilitator URL is reachable and unchanged.
 - Registration update fails:
   - Check `AGENT_OPERATOR_KEY` in `.env`.
