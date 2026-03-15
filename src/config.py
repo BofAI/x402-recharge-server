@@ -1,19 +1,19 @@
 """Configuration management"""
 
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional
-from pydantic_settings import BaseSettings
+
 from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application settings"""
-    
-    # Network
-    network: str = Field(default="mainnet", description="Network: mainnet")
-    tron_rpc_url: str = Field(default="https://api.trongrid.io")
+
+    # Environment
+    ainft_env: str = Field(default="dev", description="Environment: dev | prod")
+    tron_rpc_url: str = Field(default="")
     
     # Server
     host: str = Field(default="0.0.0.0")
@@ -32,15 +32,25 @@ class Settings(BaseSettings):
     # x402 settlement facilitator
     x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
 
+    @property
+    def network(self) -> str:
+        env = self.ainft_env.lower().strip()
+        if env == "dev":
+            return "nile"
+        if env == "prod":
+            return "mainnet"
+        raise ValueError(f"Invalid AINFT_ENV: {self.ainft_env}. Expected: dev | prod")
+
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 class NetworkConfig:
     """Network configuration loader"""
     
-    def __init__(self, network: str = "mainnet"):
+    def __init__(self, network: str = "nile"):
         self.network = network
         self._config = self._load_config()
     

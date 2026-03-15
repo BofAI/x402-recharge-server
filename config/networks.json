@@ -5,8 +5,8 @@
     "explorer": "https://tronscan.org",
     "chainId": "728126428",
     "ainftDepositAddress": "TNxh1UDWbzN8gMgfKQCSTjbB7Ugg7EuBDY",
-    "ainftApiUrl": "https://chat-dev.ainft.com/webapi/",
-    "ainftWebUrl": "https://chat-dev.ainft.com",
+    "ainftApiUrl": "https://chat.ainft.com/webapi/",
+    "ainftWebUrl": "https://chat.ainft.com",
     "erc8004Registry": "TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy",
     "tokens": {
       "TRX": {

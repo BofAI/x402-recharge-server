@@ -8,6 +8,24 @@ cd "$ROOT_DIR"
 SERVICE_NAME="ainft-merchant-agent"
 PORT="${PORT:-8000}"
 
+current_env() {
+  if [ -n "${AINFT_ENV:-}" ]; then
+    printf '%s\n' "$AINFT_ENV"
+    return
+  fi
+
+  if [ -f .env ]; then
+    local configured
+    configured="$(grep -E '^AINFT_ENV=' .env | tail -n 1 | cut -d '=' -f 2- || true)"
+    if [ -n "$configured" ]; then
+      printf '%s\n' "$configured"
+      return
+    fi
+  fi
+
+  printf 'dev\n'
+}
+
 usage() {
   cat <<'EOF'
 Usage: scripts/deploy.sh <command>
@@ -49,9 +67,8 @@ smoke_test() {
     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
   )"
 
-  echo "$tools" | grep -q '"ainft_pay_trc20"'
-  echo "$tools" | grep -q '"ainft_pay_trx"'
-  echo "smoke check passed: MCP tools/list includes ainft_pay_trc20 and ainft_pay_trx"
+  echo "$tools" | grep -q '"recharge"'
+  echo "smoke check passed: MCP tools/list includes recharge"
 }
 
 main() {
@@ -67,7 +84,7 @@ main() {
   case "$cmd" in
     up)
       docker compose up -d --build
-      echo "service started: ${SERVICE_NAME}"
+      echo "service started: ${SERVICE_NAME} (env=$(current_env))"
       ;;
     down)
       docker compose down
@@ -82,6 +99,7 @@ main() {
       ;;
     status)
       docker compose ps
+      echo "configured env: $(current_env)"
       ;;
     smoke)
       smoke_test

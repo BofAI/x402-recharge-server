@@ -4,7 +4,9 @@
 
 - Docker 24+
 - Docker Compose v2
-- Verified payment target network: `nile` (recommended for testing)
+- Decide target environment before deployment:
+  - `dev` for QA / Nile x402 test
+  - `prod` for production / TRON mainnet recharge
 
 ## 1. Configure Environment
 
@@ -14,10 +16,35 @@ cp .env.example .env
 
 Required runtime values:
 
-- `NETWORK=mainnet|nile` (for x402 testing, use `nile`)
+- `AINFT_ENV=dev|prod`
 - `HOST=0.0.0.0`
 - `PORT=8000`
 - `LOG_LEVEL=info`
+
+Recommended presets:
+
+Test / QA:
+
+```dotenv
+AINFT_ENV=dev
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=info
+```
+
+Production / mainnet:
+
+```dotenv
+AINFT_ENV=prod
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=info
+```
+
+Notes:
+
+- The runtime selects chain, deposit address, explorer, and token contracts from `config/networks.json` based on `AINFT_ENV`.
+- For mainnet deployment, OP only needs to set `AINFT_ENV=prod` in `.env`. No code change is required.
 
 ## 2. Deploy (Single Entry)
 
@@ -36,18 +63,10 @@ Basic x402 challenge check:
 ```bash
 curl -i -X POST 'http://127.0.0.1:8000/mcp' \
   -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}'
+  --data '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"recharge","arguments":{"amount":"1","token":"USDT"}}}'
 ```
 
 Expected: `HTTP/1.1 402 Payment Required`.
-
-Basic TRX native instruction check:
-
-```bash
-curl -s -X POST 'http://127.0.0.1:8000/mcp' \
-  -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"trx","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1"}}}'
-```
 
 ## 4. Logs and Restart
 
@@ -67,6 +86,9 @@ curl -s -X POST 'http://127.0.0.1:8000/mcp' \
 
 ## Production Notes
 
+- Mainnet recharge deployment uses `AINFT_ENV=prod`.
+- After startup, confirm logs show `Network: TRON Mainnet`.
+- After startup, confirm MCP `tools/list` only exposes `recharge`.
 - Expose only MCP endpoint (`/mcp`) behind HTTPS reverse proxy (Nginx/Caddy/Traefik).
 - Host registration metadata separately (public HTTPS URL or IPFS URL), then register/update URI on-chain.
 - Do not expose private keys in image or repository.
@@ -81,8 +103,8 @@ curl -s -X POST 'http://127.0.0.1:8000/mcp' \
   - Confirm reverse proxy forwards `/mcp` and supports streaming responses.
   - Confirm TLS certificate is valid on public endpoint.
 - x402 payment does not complete:
-  - Confirm `NETWORK=nile`.
-  - Confirm payer wallet has Nile USDT + TRX gas.
+  - Confirm `AINFT_ENV` matches the expected environment (`dev` for QA, `prod` for production).
+  - Confirm payer wallet has the matching network token balance and TRX gas.
   - Confirm facilitator URL is reachable and unchanged.
 - Registration update fails:
   - Check `AGENT_OPERATOR_KEY` in `.env`.

@@ -72,7 +72,9 @@ def main() -> int:
         print("Error: AGENT_OPERATOR_KEY is not set")
         return 1
 
-    network = (args.network or os.getenv("NETWORK", "mainnet")).strip().lower() or "mainnet"
+    ainft_env = os.getenv("AINFT_ENV", "prod").strip().lower() or "prod"
+    default_network = "nile" if ainft_env == "dev" else "mainnet"
+    network = (args.network or default_network).strip().lower() or default_network
     default_rpc = {
         "mainnet": "https://api.trongrid.io",
         "nile": "https://nile.trongrid.io",
@@ -80,7 +82,7 @@ def main() -> int:
     }.get(network, "https://api.trongrid.io")
     rpc_url = (args.rpc_url or os.getenv("TRON_RPC_URL", "")).strip() or default_rpc
 
-    print(f"Using network={network}, rpc_url={rpc_url}")
+    print(f"Using ainft_env={ainft_env}, network={network}, rpc_url={rpc_url}")
 
     sdk = SDK(
         chainId=1,
@@ -112,7 +114,7 @@ def main() -> int:
         print("Registering new agent")
         agent = sdk.createAgent(
             name="AINFT Merchant Agent",
-            description="MCP payee-side recharge provider for AINFT on TRON (TRC20 via x402 + TRX native).",
+            description="MCP payee-side recharge provider for AINFT on TRON (TRC20 via x402).",
             image="https://chat.ainft.com/favicon.ico",
         )
         agent.setMCP(args.mcp_endpoint, auto_fetch=True)

@@ -1,8 +1,8 @@
 # AINFT Merchant Agent
 
-AINFT top-up merchant agent — accepts on-chain payments from AI Agents and credits AINFT accounts.
+AINFT top-up merchant agent — accepts TRC20 on-chain payments from AI Agents and credits AINFT accounts.
 
-AI Agents call top-up tools via [MCP](https://modelcontextprotocol.io/). For TRC20 tokens, the service uses the [x402](https://github.com/BofAI/x402) protocol to automatically handle the challenge-sign-settle loop. For native TRX, the agent transfers on-chain and submits the txid for verification.
+AI Agents call the recharge tool via [MCP](https://modelcontextprotocol.io/). The service uses the [x402](https://github.com/BofAI/x402) protocol to automatically handle the challenge-sign-settle loop for supported TRC20 tokens.
 
 ## Payment Flow
 
@@ -11,7 +11,7 @@ AI Agents call top-up tools via [MCP](https://modelcontextprotocol.io/). For TRC
 │ AI Agent │        │ Merchant Agent    │        │ Facilitator │        │ TRON │
 │ (payer)  │        │ (this service)    │        │             │        │      │
 └────┬─────┘        └────────┬──────────┘        └──────┬──────┘        └──┬───┘
-     │  call ainft_pay_trc20 │                          │                  │
+     │    call recharge      │                          │                  │
      │ ─────────────────────>│                          │                  │
      │  402 + x402 challenge │                          │                  │
      │ <─────────────────────│                          │                  │
@@ -29,8 +29,7 @@ AI Agents call top-up tools via [MCP](https://modelcontextprotocol.io/). For TRC
 
 | Method | Tool | Protocol | Description |
 |--------|------|----------|-------------|
-| TRC20 token | `ainft_pay_trc20` | x402 | Automatic 402 challenge → sign → settle |
-| Native TRX | `ainft_pay_trx` | On-chain verify | Agent transfers TRX, then submits txid |
+| TRC20 token | `recharge` | x402 | Automatic 402 challenge → sign → settle |
 
 ## MCP Server
 
@@ -85,7 +84,7 @@ https://ainft-agent.bankofai.io/mcp
 git clone https://github.com/BofAI/ainft-merchant-agent.git
 cd ainft-merchant-agent
 
-cp .env.example .env        # Set NETWORK=nile for testing
+cp .env.example .env        # Defaults to AINFT_ENV=dev for Nile x402 testing
 
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
@@ -104,31 +103,28 @@ cp .env.example .env
 ./scripts/deploy.sh down     # Stop
 ```
 
+For production recharge on TRON mainnet, change `.env` before deploy:
+
+```dotenv
+AINFT_ENV=prod
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=info
+```
+
+The service will then load the mainnet deposit address and TRC20 token contracts from [`config/networks.json`](config/networks.json).
+
 ## API
 
-### Top-up Tools (MCP)
+### Top-up Tool (MCP)
 
-**`ainft_pay_trc20(amount, token="USDT")`** — TRC20 top-up
+**`recharge(amount, token="USDT")`** — TRC20 top-up
 
 ```bash
 curl -i -X POST http://127.0.0.1:8000/mcp \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}'
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"recharge","arguments":{"amount":"1","token":"USDT"}}}'
 # → 402 Payment Required (with x402 challenge)
-```
-
-**`ainft_pay_trx(amount, txid="")`** — Native TRX top-up
-
-```bash
-# 1) Get transfer instructions
-curl -s -X POST http://127.0.0.1:8000/mcp \
-  -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1"}}}'
-
-# 2) After on-chain transfer, submit txid for verification
-curl -s -X POST http://127.0.0.1:8000/mcp \
-  -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1","txid":"<TXID>"}}}'
 ```
 
 ### HTTP Endpoints
@@ -141,8 +137,7 @@ curl -s -X POST http://127.0.0.1:8000/mcp \
 
 ### Deprecated
 
-- `recharge(amount, token, txid)` — Compatibility alias; use `ainft_pay_trc20` / `ainft_pay_trx` directly
-- `get_balance()` — Moved to local ainft-skill
+- None. Use `recharge(amount, token)` for all supported top-ups.
 
 ## Configuration
 
@@ -150,12 +145,11 @@ Copy `.env.example` to `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NETWORK` | `mainnet` | `mainnet` or `nile` |
+| `AINFT_ENV` | `dev` | `dev` uses Nile, `prod` uses TRON mainnet |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Listen port |
 | `LOG_LEVEL` | `info` | Log level |
 | `X402_FACILITATOR_URL` | `https://facilitator.bankofai.io` | x402 settlement service |
-| `TRON_RPC_URL` | `https://api.trongrid.io` | TRON RPC (overrides network default) |
 
 Network addresses, token contracts, and minimum top-up amounts are defined in [`config/networks.json`](config/networks.json).
 
@@ -163,8 +157,8 @@ Network addresses, token contracts, and minimum top-up amounts are defined in [`
 
 | Network | Chain ID | Tokens |
 |---------|----------|--------|
-| TRON Mainnet | `728126428` | TRX, USDT, USDD, USDC, NFT |
-| TRON Nile (testnet) | `3448148188` | TRX, USDT, USDD |
+| TRON Nile (testnet) | `3448148188` | USDT, USDD |
+| TRON Mainnet | `728126428` | USDT, USDD, USDC, NFT |
 
 ## Project Structure
 

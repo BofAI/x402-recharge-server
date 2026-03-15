@@ -2,6 +2,21 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-03-15
+
+### Changed
+
+- Consolidated MCP top-up interface to a single `recharge(amount, token)` tool
+- Restricted merchant-agent top-ups to supported TRC20 tokens only
+- Updated MCP middleware and smoke checks to target `recharge` only
+- Switched deployment configuration to `AINFT_ENV=dev|prod` with `dev -> Nile` and `prod -> Mainnet`
+
+### Removed
+
+- Native TRX top-up flow (`ainft_pay_trx`)
+- Alternate MCP top-up tool name (`ainft_pay_trc20`)
+- Merchant-agent `get_balance` MCP tool
+
 ## [1.0.0] - 2026-03-06
 
 Initial release of AINFT Merchant Agent.
@@ -16,8 +31,3 @@ Initial release of AINFT Merchant Agent.
 - Token support: USDT, USDD, USDC, NFT (mainnet); USDT, USDD (Nile)
 - ERC-8004 on-chain registration script (`scripts/register_8004.py`)
 - Docker deployment + one-command ops script (`scripts/deploy.sh`)
-
-### Deprecated
-
-- `recharge` tool (compatibility alias; use `ainft_pay_trc20` / `ainft_pay_trx`)
-- `get_balance` tool (moved to local ainft-skill)
