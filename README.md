@@ -145,7 +145,7 @@ Copy `.env.example` to `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AINFT_ENV` | `dev` | `dev` uses Nile, `prod` uses TRON mainnet |
+| `AINFT_ENV` | `dev` | `dev` for local verification, `prod` for TRON mainnet deployment |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Listen port |
 | `LOG_LEVEL` | `info` | Log level |
@@ -153,11 +153,10 @@ Copy `.env.example` to `.env`:
 
 Network addresses, token contracts, and minimum top-up amounts are defined in [`config/networks.json`](config/networks.json).
 
-## Supported Networks & Tokens
+## Supported Mainnet Tokens
 
 | Network | Chain ID | Tokens |
 |---------|----------|--------|
-| TRON Nile (testnet) | `3448148188` | USDT, USDD |
 | TRON Mainnet | `728126428` | USDT, USDD, USDC, NFT |
 
 ## Project Structure
