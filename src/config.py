@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Application settings"""
 
     # Environment
-    ainft_env: str = Field(default="dev", description="Environment: dev | prod")
+    ainft_env: str = Field(default="prod", description="Environment: prod | dev")
     tron_rpc_url: str = Field(default="")
     
     # Server

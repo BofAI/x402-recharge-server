@@ -23,7 +23,7 @@ current_env() {
     fi
   fi
 
-  printf 'dev\n'
+  printf 'prod\n'
 }
 
 usage() {

@@ -84,7 +84,7 @@ https://ainft-agent.bankofai.io/mcp
 git clone https://github.com/BofAI/ainft-merchant-agent.git
 cd ainft-merchant-agent
 
-cp .env.example .env        # Defaults to AINFT_ENV=dev for Nile x402 testing
+cp .env.example .env        # Defaults to AINFT_ENV=prod for mainnet recharge
 
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
@@ -145,7 +145,7 @@ Copy `.env.example` to `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AINFT_ENV` | `dev` | `dev` for local verification, `prod` for TRON mainnet deployment |
+| `AINFT_ENV` | `prod` | `prod` for TRON mainnet deployment, `dev` only for local verification |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Listen port |
 | `LOG_LEVEL` | `info` | Log level |

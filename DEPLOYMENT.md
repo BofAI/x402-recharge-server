@@ -16,21 +16,12 @@ cp .env.example .env
 
 Required runtime values:
 
-- `AINFT_ENV=dev|prod`
+- `AINFT_ENV=prod|dev`
 - `HOST=0.0.0.0`
 - `PORT=8000`
 - `LOG_LEVEL=info`
 
 Recommended presets:
-
-Test / QA:
-
-```dotenv
-AINFT_ENV=dev
-HOST=0.0.0.0
-PORT=8000
-LOG_LEVEL=info
-```
 
 Production / mainnet:
 
@@ -41,10 +32,19 @@ PORT=8000
 LOG_LEVEL=info
 ```
 
+Optional local test:
+
+```dotenv
+AINFT_ENV=dev
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=info
+```
+
 Notes:
 
 - The runtime selects chain, deposit address, explorer, and token contracts from `config/networks.json` based on `AINFT_ENV`.
-- For mainnet deployment, OP only needs to set `AINFT_ENV=prod` in `.env`. No code change is required.
+- Mainnet is the default. OP only needs to keep `AINFT_ENV=prod` in `.env`.
 
 ## 2. Deploy (Single Entry)
 
