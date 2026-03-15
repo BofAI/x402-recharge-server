@@ -49,6 +49,7 @@ PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
 BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
+ALLOWED_TRC20_TOKENS = {"USDT", "USDD"}
 
 
 def _create_facilitator_headers() -> dict[str, dict[str, str]]:
@@ -67,7 +68,7 @@ def _build_trc20_enum() -> type[Enum]:
     token_map = {
         symbol: symbol
         for symbol, cfg in network_config.tokens.items()
-        if symbol.upper() != "TRX" and cfg.get("address")
+        if symbol.upper() in ALLOWED_TRC20_TOKENS and cfg.get("address")
     }
     if not token_map:
         raise RuntimeError("No TRC20 tokens configured for current network")
