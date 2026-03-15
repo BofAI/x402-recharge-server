@@ -31,7 +31,7 @@ AINFT_ENV=prod
 HOST=0.0.0.0
 PORT=8000
 LOG_LEVEL=info
-FACILITATOR_API_KEY=your_facilitator_api_key
+FACILITATOR_API_KEY=MAIN_API_KEY
 ```
 
 Optional local test:

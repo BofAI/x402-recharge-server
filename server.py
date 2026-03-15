@@ -17,11 +17,7 @@ from src.config import network_config, settings
 
 try:
     from bankofai.x402.encoding import decode_payment_payload
-    from bankofai.x402.http.facilitator_client import (
-        CreateHeadersAuthProvider,
-        FacilitatorConfig,
-        HTTPFacilitatorClient,
-    )
+    from bankofai.x402.facilitator import FacilitatorClient
     from bankofai.x402.types import PaymentPayload, PaymentRequirements
 except ImportError:
     import sys
@@ -31,11 +27,7 @@ except ImportError:
     if fallback.exists():
         sys.path.insert(0, str(fallback))
     from bankofai.x402.encoding import decode_payment_payload
-    from bankofai.x402.http.facilitator_client import (
-        CreateHeadersAuthProvider,
-        FacilitatorConfig,
-        HTTPFacilitatorClient,
-    )
+    from bankofai.x402.facilitator import FacilitatorClient
     from bankofai.x402.types import PaymentPayload, PaymentRequirements
 
 
@@ -62,20 +54,12 @@ BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
 def _create_facilitator_headers() -> dict[str, dict[str, str]]:
     if not settings.facilitator_api_key:
         return {}
-
-    auth_header = {"X-API-KEY": settings.facilitator_api_key}
-    return {
-        "supported": auth_header,
-        "verify": auth_header,
-        "settle": auth_header,
-    }
+    return {"X-API-KEY": settings.facilitator_api_key}
 
 
-_facilitator = HTTPFacilitatorClient(
-    FacilitatorConfig(
-        url=settings.x402_facilitator_url,
-        auth_provider=CreateHeadersAuthProvider(_create_facilitator_headers),
-    )
+_facilitator = FacilitatorClient(
+    settings.x402_facilitator_url,
+    headers=_create_facilitator_headers(),
 )
 
 
