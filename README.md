@@ -150,6 +150,7 @@ Copy `.env.example` to `.env`:
 | `PORT` | `8000` | Listen port |
 | `LOG_LEVEL` | `info` | Log level |
 | `X402_FACILITATOR_URL` | `https://facilitator.bankofai.io` | x402 settlement service |
+| `FACILITATOR_API_KEY` | empty | Optional facilitator auth header (`X-API-KEY`) to avoid anonymous rate limits |
 
 Network addresses, token contracts, and minimum top-up amounts are defined in [`config/networks.json`](config/networks.json).
 

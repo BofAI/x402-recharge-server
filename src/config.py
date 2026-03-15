@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # x402 settlement facilitator
     x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
+    facilitator_api_key: str = Field(default="")
 
     @property
     def network(self) -> str:

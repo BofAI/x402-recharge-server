@@ -20,6 +20,7 @@ Required runtime values:
 - `HOST=0.0.0.0`
 - `PORT=8000`
 - `LOG_LEVEL=info`
+- `FACILITATOR_API_KEY=<issued key>` (recommended for production to avoid anonymous rate limits)
 
 Recommended presets:
 
@@ -30,6 +31,7 @@ AINFT_ENV=prod
 HOST=0.0.0.0
 PORT=8000
 LOG_LEVEL=info
+FACILITATOR_API_KEY=your_facilitator_api_key
 ```
 
 Optional local test:
