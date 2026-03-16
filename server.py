@@ -6,14 +6,13 @@ import logging
 import time
 import uuid
 from enum import Enum
-from pathlib import Path
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
 from mcp.server.fastmcp import Context, FastMCP
 from starlette.responses import JSONResponse
 
-from src.config import network_config, settings
+from src.config import NetworkConfig, network_config, network_configs, settings
 
 try:
     from bankofai.x402.encoding import decode_payment_payload
@@ -44,12 +43,13 @@ mcp = FastMCP(
     port=settings.port,
 )
 
-network_id = f"tron:{settings.network}"
 PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
 BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
 ALLOWED_TRC20_TOKENS = {"USDT", "USDD"}
+MIN_RECHARGE_AMOUNT = Decimal("1")
+MAX_RECHARGE_AMOUNT = Decimal("20000")
 
 
 def _create_facilitator_headers() -> dict[str, dict[str, str]]:
@@ -64,11 +64,19 @@ _facilitator = FacilitatorClient(
 )
 
 
+def _supported_payment_network_configs() -> list[NetworkConfig]:
+    configs = [network_config]
+    if settings.network == "mainnet" and "bsc_mainnet" in network_configs:
+        configs.append(NetworkConfig("bsc_mainnet", network_configs))
+    return configs
+
+
 def _build_trc20_enum() -> type[Enum]:
     token_map = {
         symbol: symbol
-        for symbol, cfg in network_config.tokens.items()
-        if symbol.upper() in ALLOWED_TRC20_TOKENS and cfg.get("address")
+        for cfg in _supported_payment_network_configs()
+        for symbol, token_cfg in cfg.tokens.items()
+        if symbol.upper() in ALLOWED_TRC20_TOKENS and token_cfg.get("address")
     }
     if not token_map:
         raise RuntimeError("No TRC20 tokens configured for current network")
@@ -97,9 +105,18 @@ def _payment_failure_details(exc: Exception) -> dict[str, str]:
     return {"stage": stage, "reason": reason, "raw": raw}
 
 
-def _tx_explorer_url(tx_hash: str) -> str:
-    base = network_config.explorer.rstrip("/")
+def _find_network_config_by_payment_network(payment_network: str) -> NetworkConfig:
+    for cfg in _supported_payment_network_configs():
+        if str(cfg.payment_network) == str(payment_network):
+            return cfg
+    raise ValueError(f"Unsupported payment network: {payment_network}")
+
+
+def _tx_explorer_url(tx_hash: str, payment_network: str) -> str:
+    base = _find_network_config_by_payment_network(payment_network).explorer.rstrip("/")
     # TRON explorers commonly support /#/transaction/<txid>
+    if payment_network.startswith("eip155:"):
+        return f"{base}/tx/{tx_hash}"
     return f"{base}/#/transaction/{tx_hash}"
 
 
@@ -109,8 +126,10 @@ def _to_smallest_unit(amount: str, decimals: int) -> int:
     except InvalidOperation as exc:
         raise ValueError(f"Invalid amount: {amount}") from exc
 
-    if amount_dec <= 0:
-        raise ValueError("Amount must be greater than 0.")
+    if amount_dec < MIN_RECHARGE_AMOUNT or amount_dec > MAX_RECHARGE_AMOUNT:
+        raise ValueError(
+            f"Amount must be between {MIN_RECHARGE_AMOUNT} and {MAX_RECHARGE_AMOUNT}."
+        )
 
     multiplier = Decimal(10) ** decimals
     smallest = amount_dec * multiplier
@@ -132,43 +151,47 @@ def _normalize_trc20_token(token: str) -> str:
 
 async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url: str) -> dict[str, Any]:
     token_symbol = _normalize_trc20_token(token)
-    token_cfg = network_config.get_token_info(token_symbol)
-    if not token_cfg:
-        raise ValueError(f"Token config missing for supported TRC20 token: {token_symbol}")
+    accept_items: list[dict[str, Any]] = []
+    requirements: list[PaymentRequirements] = []
+    for cfg in _supported_payment_network_configs():
+        token_cfg = cfg.get_token_info(token_symbol)
+        if not token_cfg or not token_cfg.get("address"):
+            continue
 
-    decimals = int(token_cfg["decimals"])
-    amount_smallest = _to_smallest_unit(amount, decimals)
-    minimum_smallest = int(token_cfg["minimum"])
-    if amount_smallest < minimum_smallest:
-        raise ValueError(
-            "Amount below minimum. "
-            f"token={token_symbol}, minimum={minimum_smallest} (smallest unit)."
+        decimals = int(token_cfg["decimals"])
+        amount_smallest = _to_smallest_unit(amount, decimals)
+        minimum_smallest = int(token_cfg["minimum"])
+        if amount_smallest < minimum_smallest:
+            raise ValueError(
+                "Amount below minimum. "
+                f"token={token_symbol}, network={cfg.payment_network}, minimum={minimum_smallest} (smallest unit)."
+            )
+
+        accept_item: dict[str, Any] = {
+            "scheme": "exact_permit",
+            "network": cfg.payment_network,
+            "amount": str(amount_smallest),
+            "asset": token_cfg["address"],
+            "payTo": cfg.ainft_deposit_address,
+        }
+        accept_items.append(accept_item)
+        requirements.append(
+            PaymentRequirements(
+                scheme=accept_item["scheme"],
+                network=accept_item["network"],
+                amount=accept_item["amount"],
+                asset=accept_item["asset"],
+                payTo=accept_item["payTo"],
+                maxTimeoutSeconds=3600,
+            )
         )
 
-    scheme = "exact_permit"
-    asset = token_cfg.get("address")
-    if not asset:
-        raise ValueError(f"Token contract address missing in config: {token_symbol}")
+    if not accept_items:
+        raise ValueError(f"Token config missing for supported token: {token_symbol}")
 
-    accept_item: dict[str, Any] = {
-        "scheme": scheme,
-        "network": network_id,
-        "amount": str(amount_smallest),
-        "asset": asset,
-        "payTo": network_config.ainft_deposit_address,
-    }
-
-    req = PaymentRequirements(
-        scheme=accept_item["scheme"],
-        network=accept_item["network"],
-        amount=accept_item["amount"],
-        asset=accept_item["asset"],
-        payTo=accept_item["payTo"],
-        maxTimeoutSeconds=3600,
-    )
-    fee_quotes = await _facilitator.fee_quote([req])
-    if fee_quotes:
-        fee = fee_quotes[0].fee.model_dump(by_alias=True)
+    fee_quotes = await _facilitator.fee_quote(requirements)
+    for accept_item, quote in zip(accept_items, fee_quotes):
+        fee = quote.fee.model_dump(by_alias=True)
         fee.setdefault("facilitatorId", _facilitator.facilitator_id)
         accept_item["extra"] = {"fee": fee}
 
@@ -180,7 +203,7 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
             "description": "AINFT recharge payment challenge",
             "mimeType": "application/json",
         },
-        "accepts": [accept_item],
+        "accepts": accept_items,
         "extensions": {
             "paymentPermitContext": {
                 "meta": {
@@ -194,11 +217,9 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
         },
     }
     logger.info(
-        "Generated x402 challenge token=%s amount=%s network=%s pay_to=%s resource=%s",
+        "Generated x402 challenge token=%s networks=%s resource=%s",
         token_symbol,
-        amount_smallest,
-        network_id,
-        network_config.ainft_deposit_address,
+        [item["network"] for item in accept_items],
         resource_url,
     )
     return challenge
@@ -211,8 +232,10 @@ def _build_success_payload(
     amount: str,
     settlement: dict[str, Any],
     mode: str,
+    payment_network: str,
+    pay_to: str,
 ) -> dict[str, Any]:
-    tx_url = _tx_explorer_url(tx_hash) if tx_hash else ""
+    tx_url = _tx_explorer_url(tx_hash, payment_network) if tx_hash else ""
     return {
         "status": "paid",
         "recharge_status": "success",
@@ -226,28 +249,42 @@ def _build_success_payload(
         "transaction_url": tx_url,
         "token": token.upper(),
         "amount": amount,
-        "pay_to": network_config.ainft_deposit_address,
-        "network": network_id,
+        "pay_to": pay_to,
+        "network": payment_network,
         "verified": True,
         "settlement": settlement,
     }
 
 
-def _to_payment_requirements(challenge: dict[str, Any]) -> PaymentRequirements:
-    accepted = challenge["accepts"][0]
+def _select_payment_requirements(payload: PaymentPayload, challenge: dict[str, Any]) -> PaymentRequirements:
+    accepted_payload = payload.accepted
+    selected = next(
+        (
+            item
+            for item in challenge["accepts"]
+            if item.get("scheme") == accepted_payload.scheme
+            and str(item.get("network")) == str(accepted_payload.network)
+            and str(item.get("amount")) == str(accepted_payload.amount)
+            and str(item.get("asset")) == str(accepted_payload.asset)
+            and str(item.get("payTo")) == str(accepted_payload.payTo)
+        ),
+        None,
+    )
+    if not selected:
+        raise ValueError("facilitator verify failed: payment does not match any accepted requirement")
     return PaymentRequirements(
-        scheme=accepted["scheme"],
-        network=accepted["network"],
-        amount=accepted["amount"],
-        asset=accepted["asset"],
-        payTo=accepted["payTo"],
+        scheme=selected["scheme"],
+        network=selected["network"],
+        amount=selected["amount"],
+        asset=selected["asset"],
+        payTo=selected["payTo"],
         maxTimeoutSeconds=3600,
     )
 
 
-async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, Any]) -> dict[str, Any]:
-    requirements = _to_payment_requirements(challenge)
+async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, Any]) -> tuple[dict[str, Any], PaymentRequirements]:
     payload = decode_payment_payload(payment_signature, PaymentPayload)
+    requirements = _select_payment_requirements(payload, challenge)
 
     verify_result = await _facilitator.verify(payload, requirements)
     if not verify_result.is_valid:
@@ -256,7 +293,27 @@ async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, 
     settle_result = await _facilitator.settle(payload, requirements)
     if not settle_result.success:
         raise ValueError(f"facilitator settle failed: {settle_result.error_reason}")
-    return settle_result.model_dump(by_alias=True)
+    return settle_result.model_dump(by_alias=True), requirements
+
+
+def _build_success_from_settlement(
+    *,
+    tx_hash: str,
+    token: str,
+    amount: str,
+    settlement: dict[str, Any],
+    mode: str,
+    requirements: PaymentRequirements,
+) -> dict[str, Any]:
+    return _build_success_payload(
+        tx_hash=tx_hash,
+        token=token,
+        amount=amount,
+        settlement=settlement,
+        mode=mode,
+        payment_network=str(requirements.network),
+        pay_to=str(requirements.payTo),
+    )
 
 
 class MCPRecharge402Middleware:
@@ -366,14 +423,15 @@ class MCPRecharge402Middleware:
                 return
 
             try:
-                settle_result = await _settle_with_facilitator(payment_signature, challenge)
+                settle_result, requirements = await _settle_with_facilitator(payment_signature, challenge)
                 tx_hash = str(settle_result.get("transaction", ""))
-                success = _build_success_payload(
+                success = _build_success_from_settlement(
                     tx_hash=tx_hash,
                     token=token,
                     amount=amount,
                     settlement=settle_result,
                     mode="trc20_x402",
+                    requirements=requirements,
                 )
                 response_body = _rpc_result(success)
                 await send(
@@ -420,7 +478,7 @@ class MCPRecharge402Middleware:
 
 @mcp.tool()
 async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context | None = None) -> dict[str, Any]:
-    """TRC20 recharge tool for AINFT (x402 required).
+    """Recharge tool for AINFT on supported TRON/BSC tokens (x402 required).
 
     Note: real x402 HTTP 402/headers are enforced by MCPRecharge402Middleware.
     """
@@ -443,7 +501,7 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
     )
     if payment_signature:
         try:
-            settle_result = await _settle_with_facilitator(payment_signature, challenge)
+            settle_result, requirements = await _settle_with_facilitator(payment_signature, challenge)
         except Exception as exc:
             details = _payment_failure_details(exc)
             return {
@@ -455,12 +513,13 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
                 "message": "Provided payment is invalid or settlement failed. Create a new payment and retry.",
             }
         tx_hash = str(settle_result.get("transaction", ""))
-        return _build_success_payload(
+        return _build_success_from_settlement(
             tx_hash=tx_hash,
             token=token_symbol,
             amount=amount,
             settlement=settle_result,
             mode="trc20_x402",
+            requirements=requirements,
         )
     return {
         "status": "payment_required",
@@ -504,7 +563,7 @@ async def x402_recharge(request) -> JSONResponse:
         )
 
     try:
-        settle_result = await _settle_with_facilitator(payment_signature, challenge)
+        settle_result, requirements = await _settle_with_facilitator(payment_signature, challenge)
     except Exception as exc:
         details = _payment_failure_details(exc)
         return JSONResponse(
@@ -519,12 +578,13 @@ async def x402_recharge(request) -> JSONResponse:
         )
 
     tx_hash = str(settle_result.get("transaction", ""))
-    success = _build_success_payload(
+    success = _build_success_from_settlement(
         tx_hash=tx_hash,
         token=token_symbol,
         amount=amount,
         settlement=settle_result,
         mode="trc20_x402",
+        requirements=requirements,
     )
     return JSONResponse(
         content=success,
@@ -535,7 +595,7 @@ async def x402_recharge(request) -> JSONResponse:
 
 @mcp.custom_route("/x402/trc20/recharge", methods=["POST"])
 async def x402_trc20_recharge(request) -> JSONResponse:
-    """Alias route for explicit TRC20 x402 payment flow."""
+    """Alias route for explicit x402 token payment flow."""
     return await x402_recharge(request)
 
 

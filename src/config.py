@@ -48,23 +48,26 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 
+def load_network_configs() -> Dict[str, Dict[str, Any]]:
+    config_path = Path(__file__).parent.parent / "config" / "networks.json"
+    with open(config_path, "r") as f:
+        return json.load(f)
+
+
 class NetworkConfig:
     """Network configuration loader"""
     
-    def __init__(self, network: str = "nile"):
+    def __init__(self, network: str = "nile", all_configs: Optional[Dict[str, Dict[str, Any]]] = None):
         self.network = network
+        self._all_configs = all_configs or load_network_configs()
         self._config = self._load_config()
     
     def _load_config(self) -> Dict[str, Any]:
         """Load network configuration from JSON"""
-        config_path = Path(__file__).parent.parent / "config" / "networks.json"
-        with open(config_path, "r") as f:
-            all_configs = json.load(f)
+        if self.network not in self._all_configs:
+            raise ValueError(f"Invalid network: {self.network}. Available: {list(self._all_configs.keys())}")
         
-        if self.network not in all_configs:
-            raise ValueError(f"Invalid network: {self.network}. Available: {list(all_configs.keys())}")
-        
-        return all_configs[self.network]
+        return self._all_configs[self.network]
     
     @property
     def name(self) -> str:
@@ -77,6 +80,10 @@ class NetworkConfig:
     @property
     def explorer(self) -> str:
         return self._config["explorer"]
+
+    @property
+    def payment_network(self) -> str:
+        return self._config.get("paymentNetwork", self.network)
     
     @property
     def chain_id(self) -> str:
@@ -118,4 +125,5 @@ class NetworkConfig:
 
 # Global settings instance
 settings = Settings()
-network_config = NetworkConfig(settings.network)
+network_configs = load_network_configs()
+network_config = NetworkConfig(settings.network, network_configs)

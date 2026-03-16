@@ -1,8 +1,8 @@
 # AINFT Merchant Agent
 
-AINFT top-up merchant agent — accepts TRC20 on-chain payments from AI Agents and credits AINFT accounts.
+AINFT top-up merchant agent — accepts supported TRON and BSC stablecoin payments from AI Agents and credits AINFT accounts.
 
-AI Agents call the recharge tool via [MCP](https://modelcontextprotocol.io/). The service uses the [x402](https://github.com/BofAI/x402) protocol to automatically handle the challenge-sign-settle loop for supported TRC20 tokens.
+AI Agents call the recharge tool via [MCP](https://modelcontextprotocol.io/). The service uses the [x402](https://github.com/BofAI/x402) protocol to automatically handle the challenge-sign-settle loop for supported TRON/BSC token payments.
 
 ## Payment Flow
 
@@ -29,7 +29,7 @@ AI Agents call the recharge tool via [MCP](https://modelcontextprotocol.io/). Th
 
 | Method | Tool | Protocol | Description |
 |--------|------|----------|-------------|
-| TRC20 token | `recharge` | x402 | Automatic 402 challenge → sign → settle |
+| TRON/BSC token | `recharge` | x402 | Automatic 402 challenge → sign → settle |
 
 ## MCP Server
 
@@ -112,13 +112,13 @@ PORT=8000
 LOG_LEVEL=info
 ```
 
-The service will then load the mainnet deposit address and TRC20 token contracts from [`config/networks.json`](config/networks.json).
+The service will then load the mainnet deposit addresses and token contracts from [`config/networks.json`](config/networks.json).
 
 ## API
 
 ### Top-up Tool (MCP)
 
-**`recharge(amount, token="USDT")`** — TRC20 top-up
+**`recharge(amount, token="USDT")`** — token top-up
 
 ```bash
 curl -i -X POST http://127.0.0.1:8000/mcp \
@@ -158,7 +158,8 @@ Network addresses, token contracts, and minimum top-up amounts are defined in [`
 
 | Network | Chain ID | Tokens |
 |---------|----------|--------|
-| TRON Mainnet | `728126428` | USDT, USDD, USDC, NFT |
+| TRON Mainnet | `728126428` | USDT, USDD |
+| BSC Mainnet | `56` | USDT, USDD |
 
 ## Project Structure
 

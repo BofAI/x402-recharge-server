@@ -7,4 +7,4 @@ python-dotenv>=1.0.0
 mcp>=1.0.0
 httpx>=0.27.0
 eth-account>=0.12.0
-git+https://github.com/BofAI/x402.git#subdirectory=python/x402
+git+https://github.com/BofAI/x402.git@v0.4.4#subdirectory=python/x402

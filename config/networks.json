@@ -1,6 +1,7 @@
 {
   "mainnet": {
     "name": "TRON Mainnet",
+    "paymentNetwork": "tron:mainnet",
     "rpcUrl": "https://api.trongrid.io",
     "explorer": "https://tronscan.org",
     "chainId": "728126428",
@@ -42,6 +43,7 @@
   },
   "nile": {
     "name": "TRON Nile",
+    "paymentNetwork": "tron:nile",
     "rpcUrl": "https://nile.trongrid.io",
     "explorer": "https://nile.tronscan.org",
     "chainId": "3448148188",
@@ -64,6 +66,31 @@
       "USDD": {
         "symbol": "USDD",
         "address": "TGjgvdTWWrybVLaVeFqSyVqJQWjxqRYbaK",
+        "decimals": 18,
+        "minimum": "1000000000000000000"
+      }
+    }
+  },
+  "bsc_mainnet": {
+    "name": "BSC Mainnet",
+    "paymentNetwork": "eip155:56",
+    "rpcUrl": "https://bsc-dataseed.binance.org",
+    "explorer": "https://bscscan.com",
+    "chainId": "56",
+    "ainftDepositAddress": "0x28095930ee5507e726a8f3a8ef7b9cd81836a695",
+    "ainftApiUrl": "https://chat.ainft.com/webapi/",
+    "ainftWebUrl": "https://chat.ainft.com",
+    "erc8004Registry": "",
+    "tokens": {
+      "USDT": {
+        "symbol": "USDT",
+        "address": "0x55d398326f99059fF775485246999027B3197955",
+        "decimals": 18,
+        "minimum": "1000000000000000000"
+      },
+      "USDD": {
+        "symbol": "USDD",
+        "address": "0x45e51bc23d592eb2dba86da3985299f7895d66ba",
         "decimals": 18,
         "minimum": "1000000000000000000"
       }
