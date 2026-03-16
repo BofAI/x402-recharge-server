@@ -181,8 +181,8 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
                 network=accept_item["network"],
                 amount=accept_item["amount"],
                 asset=accept_item["asset"],
-                payTo=accept_item["payTo"],
-                maxTimeoutSeconds=3600,
+                pay_to=accept_item["payTo"],
+                max_timeout_seconds=3600,
             )
         )
 
@@ -266,7 +266,7 @@ def _select_payment_requirements(payload: PaymentPayload, challenge: dict[str, A
             and str(item.get("network")) == str(accepted_payload.network)
             and str(item.get("amount")) == str(accepted_payload.amount)
             and str(item.get("asset")) == str(accepted_payload.asset)
-            and str(item.get("payTo")) == str(accepted_payload.payTo)
+            and str(item.get("payTo")) == str(accepted_payload.pay_to)
         ),
         None,
     )
@@ -277,8 +277,8 @@ def _select_payment_requirements(payload: PaymentPayload, challenge: dict[str, A
         network=selected["network"],
         amount=selected["amount"],
         asset=selected["asset"],
-        payTo=selected["payTo"],
-        maxTimeoutSeconds=3600,
+        pay_to=selected["payTo"],
+        max_timeout_seconds=3600,
     )
 
 
@@ -312,7 +312,7 @@ def _build_success_from_settlement(
         settlement=settlement,
         mode=mode,
         payment_network=str(requirements.network),
-        pay_to=str(requirements.payTo),
+        pay_to=str(requirements.pay_to),
     )
 
 
