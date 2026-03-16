@@ -48,6 +48,7 @@ PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
 BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
 ALLOWED_TRC20_TOKENS = {"USDT", "USDD"}
+BSC_ALLOWED_TOKENS = {"USDT"}
 MIN_RECHARGE_AMOUNT = Decimal("1")
 MAX_RECHARGE_AMOUNT = Decimal("20000")
 
@@ -154,6 +155,8 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
     accept_items: list[dict[str, Any]] = []
     requirements: list[PaymentRequirements] = []
     for cfg in _supported_payment_network_configs():
+        if cfg.payment_network == "eip155:56" and token_symbol not in BSC_ALLOWED_TOKENS:
+            continue
         token_cfg = cfg.get_token_info(token_symbol)
         if not token_cfg or not token_cfg.get("address"):
             continue
@@ -190,10 +193,30 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
         raise ValueError(f"Token config missing for supported token: {token_symbol}")
 
     fee_quotes = await _facilitator.fee_quote(requirements)
-    for accept_item, quote in zip(accept_items, fee_quotes):
+    fee_quote_map: dict[tuple[str, str, str], Any] = {}
+    for quote in fee_quotes:
+        fee_quote_map[(quote.scheme, quote.network, quote.asset)] = quote
+
+    filtered_accept_items: list[dict[str, Any]] = []
+    for accept_item in accept_items:
+        key = (accept_item["scheme"], accept_item["network"], accept_item["asset"])
+        quote = fee_quote_map.get(key)
+        if not quote:
+            logger.warning(
+                "Skipping unsupported payment route token=%s network=%s asset=%s because facilitator returned no fee quote",
+                token_symbol,
+                accept_item["network"],
+                accept_item["asset"],
+            )
+            continue
         fee = quote.fee.model_dump(by_alias=True)
         fee.setdefault("facilitatorId", _facilitator.facilitator_id)
         accept_item["extra"] = {"fee": fee}
+        filtered_accept_items.append(accept_item)
+
+    accept_items = filtered_accept_items
+    if not accept_items:
+        raise ValueError(f"No supported payment routes available for token: {token_symbol}")
 
     challenge = {
         "x402Version": 2,
