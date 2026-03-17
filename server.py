@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import time
+import asyncio
 from collections import deque
 import uuid
 from enum import Enum
@@ -217,7 +218,15 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
     if not accept_items:
         raise ValueError(f"Token config missing for supported token: {token_symbol}")
 
-    fee_quotes = await _facilitator.fee_quote(requirements)
+    try:
+        fee_quotes = await asyncio.wait_for(
+            _facilitator.fee_quote(requirements),
+            timeout=settings.facilitator_timeout_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise ValueError("facilitator fee_quote failed: timeout") from exc
+    except Exception as exc:
+        raise ValueError("facilitator fee_quote failed: upstream_error") from exc
     fee_quote_map: dict[tuple[str, str, str], Any] = {}
     for quote in fee_quotes:
         fee_quote_map[(quote.scheme, quote.network, quote.asset)] = quote
@@ -334,11 +343,36 @@ async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, 
     payload = decode_payment_payload(payment_signature, PaymentPayload)
     requirements = _select_payment_requirements(payload, challenge)
 
-    verify_result = await _facilitator.verify(payload, requirements)
+    verify_result = None
+    last_exc: Exception | None = None
+    for attempt in range(settings.facilitator_verify_retries + 1):
+        try:
+            verify_result = await asyncio.wait_for(
+                _facilitator.verify(payload, requirements),
+                timeout=settings.facilitator_timeout_seconds,
+            )
+            last_exc = None
+            break
+        except asyncio.TimeoutError as exc:
+            last_exc = ValueError("facilitator verify failed: timeout")
+        except Exception as exc:
+            last_exc = ValueError("facilitator verify failed: upstream_error")
+        if attempt < settings.facilitator_verify_retries:
+            await asyncio.sleep(settings.facilitator_retry_backoff_seconds)
+    if last_exc is not None:
+        raise last_exc
     if not verify_result.is_valid:
         raise ValueError(f"facilitator verify failed: {verify_result.invalid_reason}")
 
-    settle_result = await _facilitator.settle(payload, requirements)
+    try:
+        settle_result = await asyncio.wait_for(
+            _facilitator.settle(payload, requirements),
+            timeout=settings.facilitator_settle_timeout_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise ValueError("facilitator settle failed: timeout") from exc
+    except Exception as exc:
+        raise ValueError("facilitator settle failed: upstream_error") from exc
     if not settle_result.success:
         raise ValueError(f"facilitator settle failed: {settle_result.error_reason}")
     return settle_result.model_dump(by_alias=True), requirements

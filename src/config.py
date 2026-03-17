@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # x402 settlement facilitator
     x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
     facilitator_api_key: str = Field(default="")
+    facilitator_timeout_seconds: float = Field(default=10.0)
+    facilitator_verify_retries: int = Field(default=1)
+    facilitator_retry_backoff_seconds: float = Field(default=0.5)
+    facilitator_settle_timeout_seconds: float = Field(default=120.0)
 
     @property
     def network(self) -> str:
