@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rpc-url", default="", help="Override chain RPC URL")
     parser.add_argument("--registry", default="", help="Override identity registry address")
     parser.add_argument("--agent-id", default="", help="Existing agent ID. If provided, update URI instead of registering")
-    parser.add_argument("--mcp-endpoint", default="https://ainft-agent.bankofai.io/mcp", help="MCP endpoint to publish")
+    parser.add_argument("--mcp-endpoint", default="https://recharge.bankofai.io/mcp", help="MCP endpoint to publish")
     parser.add_argument("--fee-limit", type=int, default=120_000_000, help="TRON fee limit for write transactions")
     parser.add_argument("--name", default="BofAI Payment Agent", help="Agent display name")
     parser.add_argument(
@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
         default="MCP payee-side x402 payment agent for BofAI on supported TRON and BSC routes.",
         help="Agent description",
     )
-    parser.add_argument("--image", default="https://www.bankofai.io/og_img_5.png", help="Agent image URL")
+    parser.add_argument("--image", default="https://cdn.bankofai.io/x8004/%E7%99%BD%E5%BA%95.jpg", help="Agent image URL")
     parser.add_argument("--website", default="https://www.bankofai.io/", help="Public website URL")
     parser.add_argument("--chat-url", default="https://chat.bankofai.io/chat", help="Public chat URL")
     parser.add_argument("--operator-key-env", default="", help="Override operator key env var name")

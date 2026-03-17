@@ -1,4 +1,4 @@
-"""AINFT Account Manager - MCP server for payee-side x402 challenges."""
+"""BankOfAI payment MCP server for payee-side x402 challenges."""
 
 import base64
 import json
@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
-    "ainft-account-manager",
+    "x402-recharge-server",
     stateless_http=True,
     host=settings.host,
     port=settings.port,
@@ -46,7 +46,7 @@ mcp = FastMCP(
 PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
 PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE"
 PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE"
-BILL_URL = f"{network_config.ainft_web_url.rstrip('/')}/purchase"
+BILL_URL = f"{network_config.bankofai_web_url.rstrip('/')}/purchase"
 ALLOWED_TRC20_TOKENS = {"USDT", "USDD"}
 BSC_ALLOWED_TOKENS = {"USDT"}
 MIN_RECHARGE_AMOUNT = Decimal("1")
@@ -175,7 +175,7 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
             "network": cfg.payment_network,
             "amount": str(amount_smallest),
             "asset": token_cfg["address"],
-            "payTo": cfg.ainft_deposit_address,
+            "payTo": cfg.bankofai_deposit_address,
         }
         accept_items.append(accept_item)
         requirements.append(
@@ -223,7 +223,7 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
         "error": "Payment Required",
         "resource": {
             "url": resource_url,
-            "description": "AINFT recharge payment challenge",
+            "description": "BankOfAI recharge payment challenge",
             "mimeType": "application/json",
         },
         "accepts": accept_items,
@@ -501,7 +501,7 @@ class MCPRecharge402Middleware:
 
 @mcp.tool()
 async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context | None = None) -> dict[str, Any]:
-    """Recharge tool for AINFT on supported TRON/BSC tokens (x402 required).
+    """Recharge tool for BankOfAI on supported TRON/BSC tokens (x402 required).
 
     Note: real x402 HTTP 402/headers are enforced by MCPRecharge402Middleware.
     """
@@ -626,10 +626,10 @@ if __name__ == "__main__":
     import uvicorn
 
     logger.info("=" * 60)
-    logger.info("AINFT Account Manager MCP Server Starting")
-    logger.info("Environment: %s", settings.ainft_env)
+    logger.info("BankOfAI Payment MCP Server Starting")
+    logger.info("Environment: %s", settings.bankofai_env)
     logger.info("Network: %s", network_config.name)
-    logger.info("AINFT Deposit Address: %s", network_config.ainft_deposit_address)
+    logger.info("BankOfAI Deposit Address: %s", network_config.bankofai_deposit_address)
     logger.info("Tools: recharge")
     logger.info("MCP Streamable HTTP Endpoint: http://%s:%s/mcp", settings.host, settings.port)
     logger.info("x402 HTTP Endpoint: http://%s:%s/x402/recharge", settings.host, settings.port)

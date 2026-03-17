@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Application settings"""
 
     # Environment
-    ainft_env: str = Field(default="prod", description="Environment: prod | dev")
+    bankofai_env: str = Field(default="prod", alias="BANKOFAI_ENV", description="Environment: prod | dev")
     tron_rpc_url: str = Field(default="")
     
     # Server
@@ -35,12 +35,12 @@ class Settings(BaseSettings):
 
     @property
     def network(self) -> str:
-        env = self.ainft_env.lower().strip()
+        env = self.bankofai_env.lower().strip()
         if env == "dev":
             return "nile"
         if env == "prod":
             return "mainnet"
-        raise ValueError(f"Invalid AINFT_ENV: {self.ainft_env}. Expected: dev | prod")
+        raise ValueError(f"Invalid BANKOFAI_ENV: {self.bankofai_env}. Expected: dev | prod")
 
     class Config:
         env_file = ".env"
@@ -90,16 +90,16 @@ class NetworkConfig:
         return self._config["chainId"]
     
     @property
-    def ainft_deposit_address(self) -> str:
-        return self._config["ainftDepositAddress"]
+    def bankofai_deposit_address(self) -> str:
+        return self._config.get("bankofaiDepositAddress", self._config.get("ainftDepositAddress", ""))
     
     @property
-    def ainft_api_url(self) -> str:
-        return self._config["ainftApiUrl"]
+    def bankofai_api_url(self) -> str:
+        return self._config.get("bankofaiApiUrl", self._config.get("ainftApiUrl", ""))
     
     @property
-    def ainft_web_url(self) -> str:
-        return self._config["ainftWebUrl"]
+    def bankofai_web_url(self) -> str:
+        return self._config.get("bankofaiWebUrl", self._config.get("ainftWebUrl", ""))
     
     @property
     def erc8004_registry(self) -> str:

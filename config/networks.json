@@ -5,9 +5,9 @@
     "rpcUrl": "https://api.trongrid.io",
     "explorer": "https://tronscan.org",
     "chainId": "728126428",
-    "ainftDepositAddress": "TNxh1UDWbzN8gMgfKQCSTjbB7Ugg7EuBDY",
-    "ainftApiUrl": "https://chat.ainft.com/webapi/",
-    "ainftWebUrl": "https://chat.ainft.com",
+    "bankofaiDepositAddress": "TNxh1UDWbzN8gMgfKQCSTjbB7Ugg7EuBDY",
+    "bankofaiApiUrl": "https://chat.bankofai.io/webapi/",
+    "bankofaiWebUrl": "https://chat.bankofai.io",
     "erc8004Registry": "TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy",
     "tokens": {
       "TRX": {
@@ -47,9 +47,9 @@
     "rpcUrl": "https://nile.trongrid.io",
     "explorer": "https://nile.tronscan.org",
     "chainId": "3448148188",
-    "ainftDepositAddress": "TAJJNMLYBxVUdNi6UrTspkkc7aCQPbYVUp",
-    "ainftApiUrl": "https://chat-dev.ainft.com/webapi/",
-    "ainftWebUrl": "https://chat-dev.ainft.com",
+    "bankofaiDepositAddress": "TAJJNMLYBxVUdNi6UrTspkkc7aCQPbYVUp",
+    "bankofaiApiUrl": "https://chat-dev.bankofai.io/webapi/",
+    "bankofaiWebUrl": "https://chat-dev.bankofai.io",
     "erc8004Registry": "TDDk4vc69nzBCbsY4kfu7gw2jmvbinirj5",
     "tokens": {
       "TRX": {
@@ -77,9 +77,9 @@
     "rpcUrl": "https://bsc-dataseed.binance.org",
     "explorer": "https://bscscan.com",
     "chainId": "56",
-    "ainftDepositAddress": "0x28095930ee5507e726A8F3A8EF7B9cD81836A695",
-    "ainftApiUrl": "https://chat.ainft.com/webapi/",
-    "ainftWebUrl": "https://chat.ainft.com",
+    "bankofaiDepositAddress": "0x28095930ee5507e726A8F3A8EF7B9cD81836A695",
+    "bankofaiApiUrl": "https://chat.bankofai.io/webapi/",
+    "bankofaiWebUrl": "https://chat.bankofai.io",
     "erc8004Registry": "",
     "tokens": {
       "USDT": {

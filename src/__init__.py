@@ -1,1 +1,1 @@
-"""AINFT Merchant Agent - MCP payee-side x402 challenge service."""
+"""BankOfAI payment agent - MCP payee-side x402 challenge service."""

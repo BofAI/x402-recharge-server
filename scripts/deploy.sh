@@ -5,18 +5,18 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-SERVICE_NAME="ainft-merchant-agent"
+SERVICE_NAME="x402-recharge-server"
 PORT="${PORT:-8000}"
 
 current_env() {
-  if [ -n "${AINFT_ENV:-}" ]; then
-    printf '%s\n' "$AINFT_ENV"
+  if [ -n "${BANKOFAI_ENV:-}" ]; then
+    printf '%s\n' "$BANKOFAI_ENV"
     return
   fi
 
   if [ -f .env ]; then
     local configured
-    configured="$(grep -E '^AINFT_ENV=' .env | tail -n 1 | cut -d '=' -f 2- || true)"
+    configured="$(grep -E '^BANKOFAI_ENV=' .env | tail -n 1 | cut -d '=' -f 2- || true)"
     if [ -n "$configured" ]; then
       printf '%s\n' "$configured"
       return
