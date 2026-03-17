@@ -1,17 +1,17 @@
 # BofAI Payment Agent
 
-BofAI Payment Agent is the MCP payment service used by BofAI to receive x402-based top-ups.
+BofAI Payment Agent is the MCP payment service used by BofAI to receive x402-based recharges.
 
 Its public role is simple:
 
 - expose one MCP tool: `recharge(amount, token)`
 - return x402 payment challenges
-- support stablecoin top-up on supported production chains
+- support stablecoin recharge on supported production chains
 
-In the full product flow, a companion skill can route end-user top-up requests to this MCP service.
+In the full product flow, a companion skill can route end-user recharge requests to this MCP service.
 
-This payment agent is used for AINFT account top-up.
-AINFT product entry: [https://chat.ainft.com](https://chat.ainft.com)
+This payment agent is used for BankOfAI account recharge.
+BankOfAI product entry: [https://chat.bankofai.io/chat](https://chat.bankofai.io/chat)
 
 ## Supported Routes
 
@@ -25,7 +25,7 @@ Current supported payment routes:
 Production MCP endpoint:
 
 ```text
-https://ainft-agent.bankofai.io/mcp
+https://recharge.bankofai.io/mcp
 ```
 
 ## MCP Clients
@@ -35,8 +35,8 @@ https://ainft-agent.bankofai.io/mcp
 ```json
 {
   "mcpServers": {
-    "ainft-merchant-agent": {
-      "url": "https://ainft-agent.bankofai.io/mcp"
+    "x402-recharge-server": {
+      "url": "https://recharge.bankofai.io/mcp"
     }
   }
 }
@@ -47,8 +47,8 @@ https://ainft-agent.bankofai.io/mcp
 ```json
 {
   "mcpServers": {
-    "ainft-merchant-agent": {
-      "serverUrl": "https://ainft-agent.bankofai.io/mcp"
+    "x402-recharge-server": {
+      "serverUrl": "https://recharge.bankofai.io/mcp"
     }
   }
 }
@@ -59,9 +59,9 @@ https://ainft-agent.bankofai.io/mcp
 ```json
 {
   "mcp": {
-    "ainft-merchant-agent": {
+    "x402-recharge-server": {
       "type": "remote",
-      "url": "https://ainft-agent.bankofai.io/mcp"
+      "url": "https://recharge.bankofai.io/mcp"
     }
   }
 }
@@ -72,8 +72,8 @@ https://ainft-agent.bankofai.io/mcp
 ### Local
 
 ```bash
-git clone https://github.com/BofAI/ainft-merchant-agent.git
-cd ainft-merchant-agent
+git clone https://github.com/BofAI/x402-recharge-server.git
+cd x402-recharge-server
 cp .env.example .env
 
 python3 -m venv venv
@@ -124,18 +124,17 @@ The service returns an x402 challenge. A compatible client signs the payment and
 
 ## Current Agent Registration
 
-Only the TRON-side registration is listed for now. Add the BSC-side record after BSC deployment is complete.
-
 | Chain | Network | Identity Registry | Agent ID | Status |
 |---|---|---|---:|---|
 | TRON | mainnet | `TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy` | `8` | active |
+| BSC | mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `56:43970` | active |
 
 ## Deployment
 
 Operational deployment steps are in:
 
-- [DEPLOYMENT.md](/Users/bobo/code/skills/ainft-merchant-agent/DEPLOYMENT.md)
+- [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ## License
 
-[MIT](/Users/bobo/code/skills/ainft-merchant-agent/LICENSE)
+[MIT](LICENSE)
