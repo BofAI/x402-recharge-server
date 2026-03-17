@@ -1,1 +1,1 @@
-"""Utility scripts for AINFT Merchant Agent."""
+"""Utility scripts for BankOfAI payment agent."""

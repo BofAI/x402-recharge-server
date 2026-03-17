@@ -1,19 +1,19 @@
 """Configuration management"""
 
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional
-from pydantic_settings import BaseSettings
+
 from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application settings"""
-    
-    # Network
-    network: str = Field(default="mainnet", description="Network: mainnet")
-    tron_rpc_url: str = Field(default="https://api.trongrid.io")
+
+    # Environment
+    bankofai_env: str = Field(default="prod", alias="BANKOFAI_ENV", description="Environment: prod | dev")
+    tron_rpc_url: str = Field(default="")
     
     # Server
     host: str = Field(default="0.0.0.0")
@@ -31,29 +31,43 @@ class Settings(BaseSettings):
 
     # x402 settlement facilitator
     x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
+    facilitator_api_key: str = Field(default="")
+
+    @property
+    def network(self) -> str:
+        env = self.bankofai_env.lower().strip()
+        if env == "dev":
+            return "nile"
+        if env == "prod":
+            return "mainnet"
+        raise ValueError(f"Invalid BANKOFAI_ENV: {self.bankofai_env}. Expected: dev | prod")
 
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
+
+
+def load_network_configs() -> Dict[str, Dict[str, Any]]:
+    config_path = Path(__file__).parent.parent / "config" / "networks.json"
+    with open(config_path, "r") as f:
+        return json.load(f)
 
 
 class NetworkConfig:
     """Network configuration loader"""
     
-    def __init__(self, network: str = "mainnet"):
+    def __init__(self, network: str = "nile", all_configs: Optional[Dict[str, Dict[str, Any]]] = None):
         self.network = network
+        self._all_configs = all_configs or load_network_configs()
         self._config = self._load_config()
     
     def _load_config(self) -> Dict[str, Any]:
         """Load network configuration from JSON"""
-        config_path = Path(__file__).parent.parent / "config" / "networks.json"
-        with open(config_path, "r") as f:
-            all_configs = json.load(f)
+        if self.network not in self._all_configs:
+            raise ValueError(f"Invalid network: {self.network}. Available: {list(self._all_configs.keys())}")
         
-        if self.network not in all_configs:
-            raise ValueError(f"Invalid network: {self.network}. Available: {list(all_configs.keys())}")
-        
-        return all_configs[self.network]
+        return self._all_configs[self.network]
     
     @property
     def name(self) -> str:
@@ -66,22 +80,26 @@ class NetworkConfig:
     @property
     def explorer(self) -> str:
         return self._config["explorer"]
+
+    @property
+    def payment_network(self) -> str:
+        return self._config.get("paymentNetwork", self.network)
     
     @property
     def chain_id(self) -> str:
         return self._config["chainId"]
     
     @property
-    def ainft_deposit_address(self) -> str:
-        return self._config["ainftDepositAddress"]
+    def bankofai_deposit_address(self) -> str:
+        return self._config.get("bankofaiDepositAddress", self._config.get("ainftDepositAddress", ""))
     
     @property
-    def ainft_api_url(self) -> str:
-        return self._config["ainftApiUrl"]
+    def bankofai_api_url(self) -> str:
+        return self._config.get("bankofaiApiUrl", self._config.get("ainftApiUrl", ""))
     
     @property
-    def ainft_web_url(self) -> str:
-        return self._config["ainftWebUrl"]
+    def bankofai_web_url(self) -> str:
+        return self._config.get("bankofaiWebUrl", self._config.get("ainftWebUrl", ""))
     
     @property
     def erc8004_registry(self) -> str:
@@ -107,4 +125,5 @@ class NetworkConfig:
 
 # Global settings instance
 settings = Settings()
-network_config = NetworkConfig(settings.network)
+network_configs = load_network_configs()
+network_config = NetworkConfig(settings.network, network_configs)

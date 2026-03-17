@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ainft-merchant-agent"
+name = "x402-recharge-server"
 version = "1.0.0"
-description = "x402 payment verification service for AINFT deposits on TRON"
+description = "x402 payment verification service for BankOfAI recharges on TRON and BSC"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

@@ -1,89 +1,79 @@
 # Deployment Runbook
 
-## Prerequisites
+This document is for OP deployment only.
 
-- Docker 24+
-- Docker Compose v2
-- Verified payment target network: `nile` (recommended for testing)
+## Purpose
 
-## 1. Configure Environment
+Deploy the BANK OF AI payment MCP service in production so clients can use:
+
+```text
+https://recharge.bankofai.io/mcp
+```
+
+## Production Scope
+
+Supported routes:
+
+- TRON mainnet: `USDT`, `USDD`
+- BSC mainnet: `USDT` only
+
+## Required Configuration
 
 ```bash
 cp .env.example .env
 ```
 
-Required runtime values:
+Minimum production values:
 
-- `NETWORK=mainnet|nile` (for x402 testing, use `nile`)
-- `HOST=0.0.0.0`
-- `PORT=8000`
-- `LOG_LEVEL=info`
+```dotenv
+BANKOFAI_ENV=prod
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=info
+X402_FACILITATOR_URL=https://facilitator.bankofai.io
+FACILITATOR_API_KEY=MAIN_API_KEY
+```
 
-## 2. Deploy (Single Entry)
+## Deploy
 
 ```bash
 ./scripts/deploy.sh up
 ```
 
-## 3. Verify
+## Verify
 
 ```bash
 ./scripts/deploy.sh smoke
-```
-
-Basic x402 challenge check:
-
-```bash
-curl -i -X POST 'http://127.0.0.1:8000/mcp' \
-  -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}'
-```
-
-Expected: `HTTP/1.1 402 Payment Required`.
-
-Basic TRX native instruction check:
-
-```bash
-curl -s -X POST 'http://127.0.0.1:8000/mcp' \
-  -H 'content-type: application/json' \
-  --data '{"jsonrpc":"2.0","id":"trx","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1"}}}'
-```
-
-## 4. Logs and Restart
-
-```bash
 ./scripts/deploy.sh logs
 ```
 
-```bash
-./scripts/deploy.sh restart
-```
-
-## 5. Stop
+Optional challenge check:
 
 ```bash
-./scripts/deploy.sh down
+curl -i http://127.0.0.1:8000/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"recharge","arguments":{"amount":"1","token":"USDT"}}}'
 ```
 
-## Production Notes
+Expected:
 
-- Expose only MCP endpoint (`/mcp`) behind HTTPS reverse proxy (Nginx/Caddy/Traefik).
-- Host registration metadata separately (public HTTPS URL or IPFS URL), then register/update URI on-chain.
-- Do not expose private keys in image or repository.
+- HTTP `402 Payment Required`
+- `TRON mainnet` route for `USDT`
+- `BSC mainnet` route for `USDT`
 
-## Troubleshooting
+For `USDD`, expected route is:
 
-- Smoke test fails:
-  - Run `./scripts/deploy.sh status` and confirm container is `Up`.
-  - Run `./scripts/deploy.sh logs` and check startup errors.
-  - Verify local port mapping `8000:8000` is not occupied by another process.
-- MCP client cannot connect:
-  - Confirm reverse proxy forwards `/mcp` and supports streaming responses.
-  - Confirm TLS certificate is valid on public endpoint.
-- x402 payment does not complete:
-  - Confirm `NETWORK=nile`.
-  - Confirm payer wallet has Nile USDT + TRX gas.
-  - Confirm facilitator URL is reachable and unchanged.
-- Registration update fails:
-  - Check `AGENT_OPERATOR_KEY` in `.env`.
-  - Follow [REGISTRATION.md](docs/REGISTRATION.md).
+- `TRON mainnet`
+
+## Registration
+
+Deployment and 8004 registration are separate.
+
+Use:
+
+- [REGISTRATION.md](./docs/REGISTRATION.md)
+
+## Notes
+
+- Do not put operator private keys into the runtime container.

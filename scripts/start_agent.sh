@@ -25,7 +25,8 @@ fi
 source venv/bin/activate
 pip install -q -r requirements.txt
 
-echo "Starting AINFT Merchant Agent"
+echo "Starting BankOfAI Payment Agent"
+echo "BANKOFAI_ENV: ${BANKOFAI_ENV:-prod}"
 echo "MCP endpoint: http://0.0.0.0:${PORT:-8000}/mcp"
 
 python server.py

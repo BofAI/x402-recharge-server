@@ -1,54 +1,42 @@
-# AINFT Merchant Agent
+# x402-recharge-server
 
-AINFT top-up merchant agent — accepts on-chain payments from AI Agents and credits AINFT accounts.
+`x402-recharge-server` is the MCP payment service used by BANK OF AI to receive x402-based recharges.
 
-AI Agents call top-up tools via [MCP](https://modelcontextprotocol.io/). For TRC20 tokens, the service uses the [x402](https://github.com/BofAI/x402) protocol to automatically handle the challenge-sign-settle loop. For native TRX, the agent transfers on-chain and submits the txid for verification.
+Its public role is simple:
 
-## Payment Flow
+- expose one MCP tool: `recharge(amount, token)`
+- return x402 payment challenges
+- support stablecoin recharge on supported production chains
 
-```
-┌──────────┐        ┌───────────────────┐        ┌─────────────┐        ┌──────┐
-│ AI Agent │        │ Merchant Agent    │        │ Facilitator │        │ TRON │
-│ (payer)  │        │ (this service)    │        │             │        │      │
-└────┬─────┘        └────────┬──────────┘        └──────┬──────┘        └──┬───┘
-     │  call ainft_pay_trc20 │                          │                  │
-     │ ─────────────────────>│                          │                  │
-     │  402 + x402 challenge │                          │                  │
-     │ <─────────────────────│                          │                  │
-     │                       │                          │                  │
-     │  sign & retry with    │                          │                  │
-     │  PAYMENT-SIGNATURE    │                          │                  │
-     │ ─────────────────────>│  verify + settle         │                  │
-     │                       │ ────────────────────────>│  on-chain tx     │
-     │                       │                          │ ────────────────>│
-     │                       │  settlement result       │                  │
-     │                       │ <────────────────────────│                  │
-     │  200 + tx hash        │                          │                  │
-     │ <─────────────────────│                          │                  │
-```
+In the full product flow, a companion skill can route end-user recharge requests to this MCP service.
 
-| Method | Tool | Protocol | Description |
-|--------|------|----------|-------------|
-| TRC20 token | `ainft_pay_trc20` | x402 | Automatic 402 challenge → sign → settle |
-| Native TRX | `ainft_pay_trx` | On-chain verify | Agent transfers TRX, then submits txid |
+This payment agent is used for BANK OF AI account recharge.
+BANK OF AI product entry: [https://chat.bankofai.io/chat](https://chat.bankofai.io/chat)
 
-## MCP Server
+## Supported Routes
 
-Production endpoint:
+Current supported payment routes:
 
-```
-https://ainft-agent.bankofai.io/mcp
+| Network | Tokens |
+|---|---|
+| TRON mainnet | USDT, USDD |
+| BSC mainnet | USDT only |
+
+Production MCP endpoint:
+
+```text
+https://recharge.bankofai.io/mcp
 ```
 
-### Connect from AI Agents
+## MCP Clients
 
 **Claude Desktop / Claude Code / Cursor:**
 
 ```json
 {
   "mcpServers": {
-    "ainft-merchant-agent": {
-      "url": "https://ainft-agent.bankofai.io/mcp"
+    "x402-recharge-server": {
+      "url": "https://recharge.bankofai.io/mcp"
     }
   }
 }
@@ -59,8 +47,8 @@ https://ainft-agent.bankofai.io/mcp
 ```json
 {
   "mcpServers": {
-    "ainft-merchant-agent": {
-      "serverUrl": "https://ainft-agent.bankofai.io/mcp"
+    "x402-recharge-server": {
+      "serverUrl": "https://recharge.bankofai.io/mcp"
     }
   }
 }
@@ -71,9 +59,9 @@ https://ainft-agent.bankofai.io/mcp
 ```json
 {
   "mcp": {
-    "ainft-merchant-agent": {
+    "x402-recharge-server": {
       "type": "remote",
-      "url": "https://ainft-agent.bankofai.io/mcp"
+      "url": "https://recharge.bankofai.io/mcp"
     }
   }
 }
@@ -81,115 +69,71 @@ https://ainft-agent.bankofai.io/mcp
 
 ## Quick Start
 
+### Local
+
 ```bash
-git clone https://github.com/BofAI/ainft-merchant-agent.git
-cd ainft-merchant-agent
+git clone https://github.com/BofAI/x402-recharge-server.git
+cd x402-recharge-server
+cp .env.example .env
 
-cp .env.example .env        # Set NETWORK=nile for testing
-
-python3 -m venv venv && source venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 python server.py
 ```
 
-Local endpoint: `http://0.0.0.0:8000/mcp`.
+Local MCP endpoint:
+
+```text
+http://127.0.0.1:8000/mcp
+```
 
 ### Docker
 
 ```bash
 cp .env.example .env
-./scripts/deploy.sh up       # Build and start
-./scripts/deploy.sh smoke    # Verify service is available
-./scripts/deploy.sh logs     # Follow logs
-./scripts/deploy.sh down     # Stop
+./scripts/deploy.sh up
+./scripts/deploy.sh smoke
+./scripts/deploy.sh logs
 ```
 
-## API
-
-### Top-up Tools (MCP)
-
-**`ainft_pay_trc20(amount, token="USDT")`** — TRC20 top-up
+### Quick Check
 
 ```bash
-curl -i -X POST http://127.0.0.1:8000/mcp \
+curl -i http://127.0.0.1:8000/mcp \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"ainft_pay_trc20","arguments":{"amount":"1","token":"USDT"}}}'
-# → 402 Payment Required (with x402 challenge)
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"recharge","arguments":{"amount":"1","token":"USDT"}}}'
 ```
 
-**`ainft_pay_trx(amount, txid="")`** — Native TRX top-up
+Expected:
 
-```bash
-# 1) Get transfer instructions
-curl -s -X POST http://127.0.0.1:8000/mcp \
-  -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1"}}}'
+- `402 Payment Required`
+- `TRON mainnet` route for `USDT`
+- `BSC mainnet` route for `USDT`
 
-# 2) After on-chain transfer, submit txid for verification
-curl -s -X POST http://127.0.0.1:8000/mcp \
-  -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"ainft_pay_trx","arguments":{"amount":"1","txid":"<TXID>"}}}'
+## How It Is Used
+
+An AI agent calls:
+
+```text
+recharge(amount, token)
 ```
 
-### HTTP Endpoints
+The service returns an x402 challenge. A compatible client signs the payment and retries the request. After settlement succeeds, the service returns the payment result and transaction reference.
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /mcp` | MCP streamable HTTP (primary endpoint, with x402 middleware) |
-| `POST /x402/recharge` | REST x402 top-up |
-| `POST /x402/trc20/recharge` | Alias for the above |
+## Current Agent Registration
 
-### Deprecated
-
-- `recharge(amount, token, txid)` — Compatibility alias; use `ainft_pay_trc20` / `ainft_pay_trx` directly
-- `get_balance()` — Moved to local ainft-skill
-
-## Configuration
-
-Copy `.env.example` to `.env`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NETWORK` | `mainnet` | `mainnet` or `nile` |
-| `HOST` | `0.0.0.0` | Bind address |
-| `PORT` | `8000` | Listen port |
-| `LOG_LEVEL` | `info` | Log level |
-| `X402_FACILITATOR_URL` | `https://facilitator.bankofai.io` | x402 settlement service |
-| `TRON_RPC_URL` | `https://api.trongrid.io` | TRON RPC (overrides network default) |
-
-Network addresses, token contracts, and minimum top-up amounts are defined in [`config/networks.json`](config/networks.json).
-
-## Supported Networks & Tokens
-
-| Network | Chain ID | Tokens |
-|---------|----------|--------|
-| TRON Mainnet | `728126428` | TRX, USDT, USDD, USDC, NFT |
-| TRON Nile (testnet) | `3448148188` | TRX, USDT, USDD |
-
-## Project Structure
-
-```
-server.py                    # Entry point: top-up tools + x402 middleware + HTTP routes
-src/config.py                # Config loader (.env + networks.json)
-config/networks.json         # Network config (addresses, tokens, minimums)
-scripts/
-├── deploy.sh                # Docker deployment script
-├── start_agent.sh           # Local startup script
-└── register_8004.py         # ERC-8004 on-chain registration
-```
+| Chain | Network | Identity Registry | Agent ID | Status |
+|---|---|---|---:|---|
+| TRON | mainnet | `TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy` | `8` | active |
+| BSC | mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `56:43970` | active |
 
 ## Deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the production deployment guide.
+Operational deployment steps are in:
 
-## ERC-8004 Registration
-
-On-chain agent discovery registration is independent from the runtime service. See [docs/REGISTRATION.md](docs/REGISTRATION.md).
-
-## Related Projects
-
-- [x402](https://github.com/BofAI/x402) — HTTP 402 payment protocol (Python & TypeScript SDKs)
-- [AINFT](https://ainft.com) — AI NFT platform
+- [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ## License
 

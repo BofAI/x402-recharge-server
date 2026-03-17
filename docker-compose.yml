@@ -1,14 +1,14 @@
 services:
-  ainft-merchant-agent:
+  x402-recharge-server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ainft-merchant-agent
+    container_name: x402-recharge-server
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      NETWORK: ${NETWORK:-mainnet}
+      BANKOFAI_ENV: ${BANKOFAI_ENV:-prod}
       HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-8000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
