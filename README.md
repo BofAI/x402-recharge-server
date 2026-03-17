@@ -8,7 +8,9 @@ Its public role is simple:
 - return x402 payment challenges
 - support stablecoin top-up on supported production chains
 
-## Business Scope
+In the full product flow, a companion skill can route end-user top-up requests to this MCP service.
+
+## Supported Routes
 
 Current supported payment routes:
 
@@ -16,15 +18,6 @@ Current supported payment routes:
 |---|---|
 | TRON mainnet | USDT, USDD |
 | BSC mainnet | USDT only |
-
-## Components
-
-This offering has two public-facing pieces:
-
-- `Skill`: the user-facing skill that routes top-up requests and local account queries
-  - [SKILL.md](/Users/bobo/code/skills/skills/ainft-skill/SKILL.md)
-- `Agent`: the MCP payment service in this repository
-  - [README.md](/Users/bobo/code/skills/ainft-merchant-agent/README.md)
 
 Production MCP endpoint:
 
@@ -125,12 +118,6 @@ recharge(amount, token)
 ```
 
 The service returns an x402 challenge. A compatible client signs the payment and retries the request. After settlement succeeds, the service returns the payment result and transaction reference.
-
-## Documentation
-
-Public-facing docs should cover both the skill and the agent.
-
-- [DEPLOYMENT.md](/Users/bobo/code/skills/ainft-merchant-agent/DEPLOYMENT.md)
 
 ## Deployment
 
