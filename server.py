@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import time
+from collections import deque
 import uuid
 from enum import Enum
 from decimal import Decimal, InvalidOperation
@@ -51,6 +52,30 @@ ALLOWED_TRC20_TOKENS = {"USDT", "USDD"}
 BSC_ALLOWED_TOKENS = {"USDT"}
 MIN_RECHARGE_AMOUNT = Decimal("1")
 MAX_RECHARGE_AMOUNT = Decimal("20000")
+
+_rate_limit_bucket: deque[float] | None = None
+
+
+def _is_rate_limited() -> bool:
+    limit = settings.rate_limit_per_minute
+    if limit <= 0:
+        return False
+    window = 60.0
+    now = time.time()
+    global _rate_limit_bucket
+    if _rate_limit_bucket is None:
+        _rate_limit_bucket = deque()
+    cutoff = now - window
+    while _rate_limit_bucket and _rate_limit_bucket[0] < cutoff:
+        _rate_limit_bucket.popleft()
+    if len(_rate_limit_bucket) >= limit:
+        return True
+    _rate_limit_bucket.append(now)
+    return False
+
+
+def _is_body_too_large(current_size: int) -> bool:
+    return current_size > settings.request_body_max_bytes
 
 
 def _create_facilitator_headers() -> dict[str, dict[str, str]]:
@@ -354,6 +379,18 @@ class MCPRecharge402Middleware:
             await self.app(scope, receive, send)
             return
 
+        headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
+        if _is_rate_limited():
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [(b"content-type", b"application/json")],
+                }
+            )
+            await send({"type": "http.response.body", "body": b'{"error":"rate_limited"}'})
+            return
+
         body = b""
         captured_messages: list[dict[str, Any]] = []
         while True:
@@ -362,10 +399,19 @@ class MCPRecharge402Middleware:
             if message.get("type") != "http.request":
                 break
             body += message.get("body", b"")
+            if _is_body_too_large(len(body)):
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 413,
+                        "headers": [(b"content-type", b"application/json")],
+                    }
+                )
+                await send({"type": "http.response.body", "body": b'{"error":"request_too_large"}'})
+                return
             if not message.get("more_body", False):
                 break
 
-        headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
         payment_signature = headers.get(PAYMENT_SIGNATURE_HEADER.lower())
 
         intercept = False
@@ -554,8 +600,14 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
 
 @mcp.custom_route("/x402/recharge", methods=["POST"])
 async def x402_recharge(request) -> JSONResponse:
+    if _is_rate_limited():
+        return JSONResponse(content={"error": "rate_limited"}, status_code=429)
+
     try:
-        payload = await request.json()
+        raw_body = await request.body()
+        if _is_body_too_large(len(raw_body)):
+            return JSONResponse(content={"error": "request_too_large"}, status_code=413)
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
     except Exception:
         payload = {}
 

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # Service
     service_fee_trx: float = Field(default=0.0)
     rate_limit_per_minute: int = Field(default=10)
+    request_body_max_bytes: int = Field(default=1_048_576)
 
     # x402 settlement facilitator
     x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
