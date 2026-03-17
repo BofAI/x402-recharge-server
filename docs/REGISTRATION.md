@@ -75,6 +75,13 @@ BSC mainnet:
 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432
 ```
 
+## Public Listing
+
+On-chain registration is one part of launch. Public discoverability usually needs an additional listing/indexing step.
+
+- After TRON registration, submit the TRON-side agent record to the target scan/indexer if that listing flow requires it.
+- After BSC registration, submit the BSC-side agent record and metadata URI to the target scan/indexer.
+
 ## Notes
 
 - The metadata endpoint currently points to `https://ainft-agent.bankofai.io/mcp`.

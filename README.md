@@ -15,12 +15,40 @@ Current supported payment routes:
 | Network | Tokens |
 |---|---|
 | TRON mainnet | USDT, USDD |
-| BSC mainnet | USDT |
+| BSC mainnet | USDT only |
+
+## Components
+
+This offering has two public-facing pieces:
+
+- `Skill`: the user-facing skill that routes top-up requests and local account queries
+  - [SKILL.md](/Users/bobo/code/skills/skills/ainft-skill/SKILL.md)
+- `Agent`: the MCP payment service in this repository
+  - [README.md](/Users/bobo/code/skills/ainft-merchant-agent/README.md)
 
 Production MCP endpoint:
 
 ```text
 https://ainft-agent.bankofai.io/mcp
+```
+
+## Quick Start
+
+```bash
+git clone https://github.com/BofAI/ainft-merchant-agent.git
+cd ainft-merchant-agent
+cp .env.example .env
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python server.py
+```
+
+Local MCP endpoint:
+
+```text
+http://127.0.0.1:8000/mcp
 ```
 
 ## How It Is Used
@@ -47,6 +75,14 @@ Registration script:
 Registration guide:
 
 - [docs/REGISTRATION.md](/Users/bobo/code/skills/ainft-merchant-agent/docs/REGISTRATION.md)
+
+## Documentation
+
+Public-facing docs should cover both the skill and the agent.
+
+- [docs/OVERVIEW.md](/Users/bobo/code/skills/ainft-merchant-agent/docs/OVERVIEW.md)
+- [docs/REGISTRATION.md](/Users/bobo/code/skills/ainft-merchant-agent/docs/REGISTRATION.md)
+- [DEPLOYMENT.md](/Users/bobo/code/skills/ainft-merchant-agent/DEPLOYMENT.md)
 
 ## Deployment
 

@@ -15,7 +15,7 @@ https://ainft-agent.bankofai.io/mcp
 Supported routes:
 
 - TRON mainnet: `USDT`, `USDD`
-- BSC mainnet: `USDT`
+- BSC mainnet: `USDT` only
 
 ## Required Configuration
 
