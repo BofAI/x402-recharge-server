@@ -10,6 +10,9 @@ Its public role is simple:
 
 In the full product flow, a companion skill can route end-user top-up requests to this MCP service.
 
+This payment agent is used for AINFT account top-up.
+AINFT product entry: [https://chat.ainft.com](https://chat.ainft.com)
+
 ## Supported Routes
 
 Current supported payment routes:
@@ -118,6 +121,14 @@ recharge(amount, token)
 ```
 
 The service returns an x402 challenge. A compatible client signs the payment and retries the request. After settlement succeeds, the service returns the payment result and transaction reference.
+
+## Current Agent Registration
+
+Only the TRON-side registration is listed for now. Add the BSC-side record after BSC deployment is complete.
+
+| Chain | Network | Identity Registry | Agent ID | Status |
+|---|---|---|---:|---|
+| TRON | mainnet | `TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy` | `8` | active |
 
 ## Deployment
 
