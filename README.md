@@ -40,11 +40,6 @@ This service is prepared for ERC-8004 registration on:
 - TRON mainnet
 - BSC mainnet
 
-Prepared registration metadata:
-
-- [docs/bofai-agent-tron-mainnet-registration-v1.json](/Users/bobo/code/skills/ainft-merchant-agent/docs/bofai-agent-tron-mainnet-registration-v1.json)
-- [docs/bofai-agent-bsc-mainnet-registration-v1.json](/Users/bobo/code/skills/ainft-merchant-agent/docs/bofai-agent-bsc-mainnet-registration-v1.json)
-
 Registration script:
 
 - [scripts/register_8004.py](/Users/bobo/code/skills/ainft-merchant-agent/scripts/register_8004.py)

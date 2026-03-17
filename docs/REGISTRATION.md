@@ -11,10 +11,7 @@ Prepare and register the agent on:
 
 ## Metadata Files
 
-- [bofai-agent-tron-mainnet-registration-v1.json](/Users/bobo/code/skills/ainft-merchant-agent/docs/bofai-agent-tron-mainnet-registration-v1.json)
-- [bofai-agent-bsc-mainnet-registration-v1.json](/Users/bobo/code/skills/ainft-merchant-agent/docs/bofai-agent-bsc-mainnet-registration-v1.json)
-
-Host these files on HTTPS or IPFS before registration.
+Registration metadata should be generated or prepared per chain, then hosted on HTTPS or IPFS before registration.
 
 ## Operator Keys
 
