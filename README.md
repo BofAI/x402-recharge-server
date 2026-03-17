@@ -32,7 +32,48 @@ Production MCP endpoint:
 https://ainft-agent.bankofai.io/mcp
 ```
 
+## MCP Clients
+
+**Claude Desktop / Claude Code / Cursor:**
+
+```json
+{
+  "mcpServers": {
+    "ainft-merchant-agent": {
+      "url": "https://ainft-agent.bankofai.io/mcp"
+    }
+  }
+}
+```
+
+**Antigravity:**
+
+```json
+{
+  "mcpServers": {
+    "ainft-merchant-agent": {
+      "serverUrl": "https://ainft-agent.bankofai.io/mcp"
+    }
+  }
+}
+```
+
+**OpenCode:**
+
+```json
+{
+  "mcp": {
+    "ainft-merchant-agent": {
+      "type": "remote",
+      "url": "https://ainft-agent.bankofai.io/mcp"
+    }
+  }
+}
+```
+
 ## Quick Start
+
+### Local
 
 ```bash
 git clone https://github.com/BofAI/ainft-merchant-agent.git
@@ -51,6 +92,30 @@ Local MCP endpoint:
 http://127.0.0.1:8000/mcp
 ```
 
+### Docker
+
+```bash
+cp .env.example .env
+./scripts/deploy.sh up
+./scripts/deploy.sh smoke
+./scripts/deploy.sh logs
+```
+
+### Quick Check
+
+```bash
+curl -i http://127.0.0.1:8000/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":"check-402","method":"tools/call","params":{"name":"recharge","arguments":{"amount":"1","token":"USDT"}}}'
+```
+
+Expected:
+
+- `402 Payment Required`
+- `TRON mainnet` route for `USDT`
+- `BSC mainnet` route for `USDT`
+
 ## How It Is Used
 
 An AI agent calls:
@@ -61,27 +126,10 @@ recharge(amount, token)
 
 The service returns an x402 challenge. A compatible client signs the payment and retries the request. After settlement succeeds, the service returns the payment result and transaction reference.
 
-## Registration
-
-This service is prepared for ERC-8004 registration on:
-
-- TRON mainnet
-- BSC mainnet
-
-Registration script:
-
-- [scripts/register_8004.py](/Users/bobo/code/skills/ainft-merchant-agent/scripts/register_8004.py)
-
-Registration guide:
-
-- [docs/REGISTRATION.md](/Users/bobo/code/skills/ainft-merchant-agent/docs/REGISTRATION.md)
-
 ## Documentation
 
 Public-facing docs should cover both the skill and the agent.
 
-- [docs/OVERVIEW.md](/Users/bobo/code/skills/ainft-merchant-agent/docs/OVERVIEW.md)
-- [docs/REGISTRATION.md](/Users/bobo/code/skills/ainft-merchant-agent/docs/REGISTRATION.md)
 - [DEPLOYMENT.md](/Users/bobo/code/skills/ainft-merchant-agent/DEPLOYMENT.md)
 
 ## Deployment
