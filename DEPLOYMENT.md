@@ -4,10 +4,10 @@ This document is for OP deployment only.
 
 ## Purpose
 
-Deploy the BofAI payment MCP service in production so clients can use:
+Deploy the BANK OF AI payment MCP service in production so clients can use:
 
 ```text
-https://ainft-agent.bankofai.io/mcp
+https://recharge.bankofai.io/mcp
 ```
 
 ## Production Scope
@@ -26,7 +26,7 @@ cp .env.example .env
 Minimum production values:
 
 ```dotenv
-AINFT_ENV=prod
+BANKOFAI_ENV=prod
 HOST=0.0.0.0
 PORT=8000
 LOG_LEVEL=info
@@ -72,9 +72,8 @@ Deployment and 8004 registration are separate.
 
 Use:
 
-- [docs/REGISTRATION.md](/Users/bobo/code/skills/ainft-merchant-agent/docs/REGISTRATION.md)
+- [REGISTRATION.md](./docs/REGISTRATION.md)
 
 ## Notes
 
-- Runtime variable names still use some legacy naming, but the public-facing service is `BofAI`.
 - Do not put operator private keys into the runtime container.

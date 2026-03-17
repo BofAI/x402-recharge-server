@@ -10,8 +10,8 @@ Its public role is simple:
 
 In the full product flow, a companion skill can route end-user recharge requests to this MCP service.
 
-This payment agent is used for BankOfAI account recharge.
-BankOfAI product entry: [https://chat.bankofai.io/chat](https://chat.bankofai.io/chat)
+This payment agent is used for BANK OF AI account recharge.
+BANK OF AI product entry: [https://chat.bankofai.io/chat](https://chat.bankofai.io/chat)
 
 ## Supported Routes
 

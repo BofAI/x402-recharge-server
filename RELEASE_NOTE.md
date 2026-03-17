@@ -4,15 +4,15 @@
 
 ## Overview
 
-AINFT Merchant Agent now exposes a single MCP top-up tool, `recharge`, and supports TRC20 tokens only.
+BANK OF AI Payment Agent now exposes a single MCP recharge tool, `recharge`, and supports TRC20 tokens only.
 
 ## Highlights
 
-**Single MCP Tool** — Agents now call `recharge(amount, token)` for all supported top-ups. The previous split between `ainft_pay_trc20` and `recharge` has been removed.
+**Single MCP Tool** — Agents now call `recharge(amount, token)` for all supported recharges.
 
 **TRC20 Automatic Payment** — When an agent calls `recharge`, the service returns HTTP 402 with an x402 challenge. After the agent signs and retries, the service verifies and settles on-chain via the Facilitator. Fully automatic for x402-compatible clients.
 
-**Environment-Based Deployment** — Runtime configuration now uses `AINFT_ENV=dev|prod`. `dev` is for local verification, and `prod` is for TRON mainnet production recharge.
+**Environment-Based Deployment** — Runtime configuration now uses `BANKOFAI_ENV=dev|prod`. `dev` is for local verification, and `prod` is for TRON mainnet production recharge.
 
 ## Supported Mainnet Tokens
 
@@ -26,8 +26,8 @@ AINFT Merchant Agent now exposes a single MCP top-up tool, `recharge`, and suppo
 ## Getting Started
 
 ```bash
-git clone https://github.com/BofAI/ainft-merchant-agent.git
-cd ainft-merchant-agent
+git clone https://github.com/BofAI/x402-recharge-server.git
+cd x402-recharge-server
 cp .env.example .env
 pip install -r requirements.txt
 python server.py

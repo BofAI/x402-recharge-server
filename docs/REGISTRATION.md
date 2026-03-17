@@ -9,6 +9,16 @@ Prepare and register the agent on:
 - TRON mainnet
 - BSC mainnet
 
+## Current Registrations
+
+| Chain | Network | Identity Registry | Agent ID | Status |
+|---|---|---|---:|---|
+| TRON | mainnet | `TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy` | `8` | active |
+| BSC | mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `56:43970` | active |
+
+This agent is used for BANK OF AI account recharge over MCP + x402.
+BANK OF AI product entry: [https://chat.bankofai.io/chat](https://chat.bankofai.io/chat)
+
 ## Metadata Files
 
 Registration metadata should be generated or prepared per chain, then hosted on HTTPS or IPFS before registration.
@@ -84,5 +94,6 @@ On-chain registration is one part of launch. Public discoverability usually need
 
 ## Notes
 
-- The metadata endpoint currently points to `https://ainft-agent.bankofai.io/mcp`.
+- The metadata endpoint currently points to `https://recharge.bankofai.io/mcp`.
+- Recommended image URL: `https://cdn.bankofai.io/x8004/%E7%99%BD%E5%BA%95.jpg`
 - Public brand in metadata is `BofAI`.
