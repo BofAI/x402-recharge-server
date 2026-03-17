@@ -1,6 +1,6 @@
-# BofAI Payment Agent
+# x402-recharge-server
 
-BofAI Payment Agent is the MCP payment service used by BofAI to receive x402-based recharges.
+`x402-recharge-server` is the MCP payment service used by BANK OF AI to receive x402-based recharges.
 
 Its public role is simple:
 
