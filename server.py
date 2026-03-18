@@ -4,6 +4,8 @@ import base64
 import json
 import logging
 import time
+import asyncio
+from collections import deque
 import uuid
 from enum import Enum
 from decimal import Decimal, InvalidOperation
@@ -51,6 +53,30 @@ ALLOWED_TRC20_TOKENS = {"USDT", "USDD"}
 BSC_ALLOWED_TOKENS = {"USDT"}
 MIN_RECHARGE_AMOUNT = Decimal("1")
 MAX_RECHARGE_AMOUNT = Decimal("20000")
+
+_rate_limit_bucket: deque[float] | None = None
+
+
+def _is_rate_limited() -> bool:
+    limit = settings.rate_limit_per_minute
+    if limit <= 0:
+        return False
+    window = 60.0
+    now = time.time()
+    global _rate_limit_bucket
+    if _rate_limit_bucket is None:
+        _rate_limit_bucket = deque()
+    cutoff = now - window
+    while _rate_limit_bucket and _rate_limit_bucket[0] < cutoff:
+        _rate_limit_bucket.popleft()
+    if len(_rate_limit_bucket) >= limit:
+        return True
+    _rate_limit_bucket.append(now)
+    return False
+
+
+def _is_body_too_large(current_size: int) -> bool:
+    return current_size > settings.request_body_max_bytes
 
 
 def _create_facilitator_headers() -> dict[str, dict[str, str]]:
@@ -192,7 +218,15 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
     if not accept_items:
         raise ValueError(f"Token config missing for supported token: {token_symbol}")
 
-    fee_quotes = await _facilitator.fee_quote(requirements)
+    try:
+        fee_quotes = await asyncio.wait_for(
+            _facilitator.fee_quote(requirements),
+            timeout=settings.facilitator_timeout_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise ValueError("facilitator fee_quote failed: timeout") from exc
+    except Exception as exc:
+        raise ValueError("facilitator fee_quote failed: upstream_error") from exc
     fee_quote_map: dict[tuple[str, str, str], Any] = {}
     for quote in fee_quotes:
         fee_quote_map[(quote.scheme, quote.network, quote.asset)] = quote
@@ -309,11 +343,36 @@ async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, 
     payload = decode_payment_payload(payment_signature, PaymentPayload)
     requirements = _select_payment_requirements(payload, challenge)
 
-    verify_result = await _facilitator.verify(payload, requirements)
+    verify_result = None
+    last_exc: Exception | None = None
+    for attempt in range(settings.facilitator_verify_retries + 1):
+        try:
+            verify_result = await asyncio.wait_for(
+                _facilitator.verify(payload, requirements),
+                timeout=settings.facilitator_timeout_seconds,
+            )
+            last_exc = None
+            break
+        except asyncio.TimeoutError as exc:
+            last_exc = ValueError("facilitator verify failed: timeout")
+        except Exception as exc:
+            last_exc = ValueError("facilitator verify failed: upstream_error")
+        if attempt < settings.facilitator_verify_retries:
+            await asyncio.sleep(settings.facilitator_retry_backoff_seconds)
+    if last_exc is not None:
+        raise last_exc
     if not verify_result.is_valid:
         raise ValueError(f"facilitator verify failed: {verify_result.invalid_reason}")
 
-    settle_result = await _facilitator.settle(payload, requirements)
+    try:
+        settle_result = await asyncio.wait_for(
+            _facilitator.settle(payload, requirements),
+            timeout=settings.facilitator_settle_timeout_seconds,
+        )
+    except asyncio.TimeoutError as exc:
+        raise ValueError("facilitator settle failed: timeout") from exc
+    except Exception as exc:
+        raise ValueError("facilitator settle failed: upstream_error") from exc
     if not settle_result.success:
         raise ValueError(f"facilitator settle failed: {settle_result.error_reason}")
     return settle_result.model_dump(by_alias=True), requirements
@@ -354,6 +413,18 @@ class MCPRecharge402Middleware:
             await self.app(scope, receive, send)
             return
 
+        headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
+        if _is_rate_limited():
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [(b"content-type", b"application/json")],
+                }
+            )
+            await send({"type": "http.response.body", "body": b'{"error":"rate_limited"}'})
+            return
+
         body = b""
         captured_messages: list[dict[str, Any]] = []
         while True:
@@ -362,10 +433,19 @@ class MCPRecharge402Middleware:
             if message.get("type") != "http.request":
                 break
             body += message.get("body", b"")
+            if _is_body_too_large(len(body)):
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 413,
+                        "headers": [(b"content-type", b"application/json")],
+                    }
+                )
+                await send({"type": "http.response.body", "body": b'{"error":"request_too_large"}'})
+                return
             if not message.get("more_body", False):
                 break
 
-        headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
         payment_signature = headers.get(PAYMENT_SIGNATURE_HEADER.lower())
 
         intercept = False
@@ -554,8 +634,14 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
 
 @mcp.custom_route("/x402/recharge", methods=["POST"])
 async def x402_recharge(request) -> JSONResponse:
+    if _is_rate_limited():
+        return JSONResponse(content={"error": "rate_limited"}, status_code=429)
+
     try:
-        payload = await request.json()
+        raw_body = await request.body()
+        if _is_body_too_large(len(raw_body)):
+            return JSONResponse(content={"error": "request_too_large"}, status_code=413)
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
     except Exception:
         payload = {}
 
