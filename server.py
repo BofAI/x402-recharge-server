@@ -11,6 +11,7 @@ from enum import Enum
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable
 
+import httpx
 from mcp.server.fastmcp import Context, FastMCP
 from starlette.responses import JSONResponse
 
@@ -147,7 +148,25 @@ def _tx_explorer_url(tx_hash: str, payment_network: str) -> str:
     return f"{base}/#/transaction/{tx_hash}"
 
 
+def _bankofai_chain_id(payment_network: str) -> str:
+    if payment_network == "tron:mainnet":
+        return "eip155:728126428"
+    if payment_network == "tron:nile":
+        return "eip155:3448148188"
+    if payment_network == "eip155:56":
+        return "eip155:56"
+    raise ValueError(f"Unsupported chain mapping for payment network: {payment_network}")
+
+
 def _to_smallest_unit(amount: str, decimals: int) -> int:
+    try:
+        amount_dec = Decimal(amount)
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid amount: {amount}") from exc
+    return _decimal_to_smallest_unit(amount_dec, decimals)
+
+
+def _parse_recharge_amount(amount: str) -> Decimal:
     try:
         amount_dec = Decimal(amount)
     except InvalidOperation as exc:
@@ -157,7 +176,10 @@ def _to_smallest_unit(amount: str, decimals: int) -> int:
         raise ValueError(
             f"Amount must be between {MIN_RECHARGE_AMOUNT} and {MAX_RECHARGE_AMOUNT}."
         )
+    return amount_dec
 
+
+def _decimal_to_smallest_unit(amount_dec: Decimal, decimals: int) -> int:
     multiplier = Decimal(10) ** decimals
     smallest = amount_dec * multiplier
     if smallest != smallest.to_integral_value():
@@ -178,6 +200,7 @@ def _normalize_trc20_token(token: str) -> str:
 
 async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url: str) -> dict[str, Any]:
     token_symbol = _normalize_trc20_token(token)
+    amount_dec = _parse_recharge_amount(amount)
     accept_items: list[dict[str, Any]] = []
     requirements: list[PaymentRequirements] = []
     for cfg in _supported_payment_network_configs():
@@ -188,13 +211,28 @@ async def _build_trc20_recharge_challenge(amount: str, token: str, resource_url:
             continue
 
         decimals = int(token_cfg["decimals"])
-        amount_smallest = _to_smallest_unit(amount, decimals)
+        try:
+            amount_smallest = _decimal_to_smallest_unit(amount_dec, decimals)
+        except ValueError as exc:
+            logger.warning(
+                "Skipping payment route token=%s network=%s amount=%s: %s",
+                token_symbol,
+                cfg.payment_network,
+                amount,
+                exc,
+            )
+            continue
         minimum_smallest = int(token_cfg["minimum"])
         if amount_smallest < minimum_smallest:
-            raise ValueError(
-                "Amount below minimum. "
-                f"token={token_symbol}, network={cfg.payment_network}, minimum={minimum_smallest} (smallest unit)."
+            logger.warning(
+                "Skipping payment route token=%s network=%s amount=%s: below minimum smallest=%s minimum=%s",
+                token_symbol,
+                cfg.payment_network,
+                amount,
+                amount_smallest,
+                minimum_smallest,
             )
+            continue
 
         accept_item: dict[str, Any] = {
             "scheme": "exact_permit",
@@ -291,9 +329,10 @@ def _build_success_payload(
     mode: str,
     payment_network: str,
     pay_to: str,
+    bankofai_recharge: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     tx_url = _tx_explorer_url(tx_hash, payment_network) if tx_hash else ""
-    return {
+    payload = {
         "status": "paid",
         "recharge_status": "success",
         "mode": mode,
@@ -311,6 +350,12 @@ def _build_success_payload(
         "verified": True,
         "settlement": settlement,
     }
+    if bankofai_recharge is not None:
+        payload["bankofai_recharge"] = bankofai_recharge
+        recharge_status = str(bankofai_recharge.get("status", "")).strip().lower()
+        if recharge_status:
+            payload["recharge_status"] = recharge_status
+    return payload
 
 
 def _select_payment_requirements(payload: PaymentPayload, challenge: dict[str, Any]) -> PaymentRequirements:
@@ -378,6 +423,52 @@ async def _settle_with_facilitator(payment_signature: str, challenge: dict[str, 
     return settle_result.model_dump(by_alias=True), requirements
 
 
+async def _query_bankofai_recharge_status(tx_hash: str, payment_network: str) -> dict[str, Any] | None:
+    merchant_id = settings.bankofai_merchant_id.strip()
+    merchant_key = settings.bankofai_merchant_key.strip()
+    if not merchant_id or not merchant_key or not tx_hash:
+        return None
+
+    cfg = _find_network_config_by_payment_network(payment_network)
+    url = f"{cfg.bankofai_api_url.rstrip('/')}/m/credit/recharge"
+    headers = {
+        "X-Merchant-Id": merchant_id,
+        "X-Merchant-Key": merchant_key,
+        "Content-Type": "application/json",
+    }
+    body = {
+        "chain": _bankofai_chain_id(payment_network),
+        "tx_hash": tx_hash,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=settings.bankofai_api_timeout_seconds) as client:
+            response = await client.post(url, headers=headers, json=body)
+    except Exception as exc:
+        logger.warning("BANK OF AI recharge status query failed tx=%s network=%s error=%s", tx_hash, payment_network, exc)
+        return None
+
+    try:
+        data = response.json() if response.content else {}
+    except Exception:
+        data = {"raw": response.text}
+
+    if response.status_code != 200:
+        logger.warning(
+            "BANK OF AI recharge status query returned non-200 tx=%s network=%s status=%s body=%s",
+            tx_hash,
+            payment_network,
+            response.status_code,
+            data,
+        )
+        return None
+
+    payload = data.get("data", data)
+    if not isinstance(payload, dict):
+        return None
+
+    return payload
+
+
 def _build_success_from_settlement(
     *,
     tx_hash: str,
@@ -386,6 +477,7 @@ def _build_success_from_settlement(
     settlement: dict[str, Any],
     mode: str,
     requirements: PaymentRequirements,
+    bankofai_recharge: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return _build_success_payload(
         tx_hash=tx_hash,
@@ -395,6 +487,7 @@ def _build_success_from_settlement(
         mode=mode,
         payment_network=str(requirements.network),
         pay_to=str(requirements.pay_to),
+        bankofai_recharge=bankofai_recharge,
     )
 
 
@@ -528,6 +621,10 @@ class MCPRecharge402Middleware:
             try:
                 settle_result, requirements = await _settle_with_facilitator(payment_signature, challenge)
                 tx_hash = str(settle_result.get("transaction", ""))
+                bankofai_recharge = await _query_bankofai_recharge_status(
+                    tx_hash=tx_hash,
+                    payment_network=str(requirements.network),
+                )
                 success = _build_success_from_settlement(
                     tx_hash=tx_hash,
                     token=token,
@@ -535,6 +632,7 @@ class MCPRecharge402Middleware:
                     settlement=settle_result,
                     mode="trc20_x402",
                     requirements=requirements,
+                    bankofai_recharge=bankofai_recharge,
                 )
                 response_body = _rpc_result(success)
                 await send(
@@ -616,6 +714,10 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
                 "message": "Provided payment is invalid or settlement failed. Create a new payment and retry.",
             }
         tx_hash = str(settle_result.get("transaction", ""))
+        bankofai_recharge = await _query_bankofai_recharge_status(
+            tx_hash=tx_hash,
+            payment_network=str(requirements.network),
+        )
         return _build_success_from_settlement(
             tx_hash=tx_hash,
             token=token_symbol,
@@ -623,6 +725,7 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
             settlement=settle_result,
             mode="trc20_x402",
             requirements=requirements,
+            bankofai_recharge=bankofai_recharge,
         )
     return {
         "status": "payment_required",
@@ -687,6 +790,10 @@ async def x402_recharge(request) -> JSONResponse:
         )
 
     tx_hash = str(settle_result.get("transaction", ""))
+    bankofai_recharge = await _query_bankofai_recharge_status(
+        tx_hash=tx_hash,
+        payment_network=str(requirements.network),
+    )
     success = _build_success_from_settlement(
         tx_hash=tx_hash,
         token=token_symbol,
@@ -694,6 +801,7 @@ async def x402_recharge(request) -> JSONResponse:
         settlement=settle_result,
         mode="trc20_x402",
         requirements=requirements,
+        bankofai_recharge=bankofai_recharge,
     )
     return JSONResponse(
         content=success,

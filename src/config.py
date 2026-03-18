@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     
     # Service
     service_fee_trx: float = Field(default=0.0)
-    rate_limit_per_minute: int = Field(default=10)
+    rate_limit_per_minute: int = Field(default=120)
     request_body_max_bytes: int = Field(default=1_048_576)
 
     # x402 settlement facilitator
@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     facilitator_verify_retries: int = Field(default=1)
     facilitator_retry_backoff_seconds: float = Field(default=0.5)
     facilitator_settle_timeout_seconds: float = Field(default=120.0)
+
+    # BANK OF AI merchant recharge status API
+    bankofai_merchant_id: str = Field(default="")
+    bankofai_merchant_key: str = Field(default="")
+    bankofai_api_timeout_seconds: float = Field(default=10.0)
 
     @property
     def network(self) -> str:
@@ -80,6 +85,8 @@ class NetworkConfig:
     
     @property
     def rpc_url(self) -> str:
+        if self.payment_network.startswith("tron:") and settings.tron_rpc_url.strip():
+            return settings.tron_rpc_url.strip()
         return self._config["rpcUrl"]
     
     @property
