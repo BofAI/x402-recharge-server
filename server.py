@@ -798,7 +798,7 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
     }
 
 
-@mcp.custom_route("/")
+@mcp.custom_route("/", methods=["GET"])
 async def root(request) -> JSONResponse:
     """Root health check endpoint."""
     return JSONResponse(
@@ -812,7 +812,7 @@ async def root(request) -> JSONResponse:
     )
 
 
-@mcp.custom_route("/health")
+@mcp.custom_route("/health", methods=["GET"])
 async def health(request) -> JSONResponse:
     """Explicit health check endpoint."""
     return await root(request)
