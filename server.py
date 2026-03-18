@@ -798,6 +798,26 @@ async def recharge(amount: str, token: str = DEFAULT_TRC20_TOKEN, ctx: Context |
     }
 
 
+@mcp.custom_route("/")
+async def root(request) -> JSONResponse:
+    """Root health check endpoint."""
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "service": "x402-recharge-server",
+            "version": "2.0.0",
+            "message": "BankOfAI x402 Recharge MCP Server is running."
+        },
+        status_code=200
+    )
+
+
+@mcp.custom_route("/health")
+async def health(request) -> JSONResponse:
+    """Explicit health check endpoint."""
+    return await root(request)
+
+
 @mcp.custom_route("/x402/recharge", methods=["POST"])
 async def x402_recharge(request) -> JSONResponse:
     if _is_rate_limited():
