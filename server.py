@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import os
 import time
 import asyncio
 from collections import deque
@@ -33,9 +34,29 @@ except ImportError:
     from bankofai.x402.types import PaymentPayload, PaymentRequirements
 
 
+# Configure logging
+LOG_DIR = "/app/logs"
+LOG_FILE = os.path.join(LOG_DIR, "server.log")
+
+# Ensure log directory exists
+if not os.path.exists(LOG_DIR):
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+    except Exception:
+        # Fallback for environments where /app/logs might not be writable
+        pass
+
+log_handlers = [logging.StreamHandler()]
+if os.path.exists(LOG_DIR) or os.access(os.path.dirname(LOG_DIR) or ".", os.W_OK):
+    try:
+        log_handlers.append(logging.FileHandler(LOG_FILE))
+    except Exception:
+        pass
+
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=log_handlers
 )
 logger = logging.getLogger(__name__)
 
