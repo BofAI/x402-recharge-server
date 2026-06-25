@@ -1,21 +1,26 @@
-FROM python:3.12-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+FROM node:22-slim AS build
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci
 
-COPY requirements.txt ./
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY config ./config
+COPY src ./src
+RUN npm run build
 
-COPY . .
+FROM node:22-slim
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=build /app/dist ./dist
+COPY config ./config
 
 EXPOSE 8000
 
-CMD ["python", "server.py"]
+CMD ["node", "dist/server.js"]

@@ -1,0 +1,34 @@
+{
+  "name": "x402-recharge-server",
+  "version": "2.0.0",
+  "description": "x402 payment verification MCP service for BANK OF AI recharges on TRON and BSC",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@bankofai/x402-core": "1.0.0-beta.4",
+    "@bankofai/x402-evm": "1.0.0-beta.4",
+    "@bankofai/x402-tron": "1.0.0-beta.4",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@bankofai/agent-wallet": "^2.4.0",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.13.4",
+    "tronweb": "^6.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3",
+    "viem": "^2.53.1"
+  }
+}

@@ -95,5 +95,24 @@
         "minimum": "1000000000000000000"
       }
     }
+  },
+  "bsc_testnet": {
+    "name": "BSC Testnet",
+    "paymentNetwork": "eip155:97",
+    "rpcUrl": "https://data-seed-prebsc-1-s1.binance.org:8545",
+    "explorer": "https://testnet.bscscan.com",
+    "chainId": "97",
+    "bankofaiDepositAddress": "0x28095930ee5507e726A8F3A8EF7B9cD81836A695",
+    "bankofaiApiUrl": "https://chat-dev.bankofai.io/webapi/",
+    "bankofaiWebUrl": "https://chat-dev.bankofai.io",
+    "erc8004Registry": "",
+    "tokens": {
+      "USDT": {
+        "symbol": "USDT",
+        "address": "0x64544969ed7EBf5f083679233325356EbE738930",
+        "decimals": 18,
+        "minimum": "1000000000000000000"
+      }
+    }
   }
 }
