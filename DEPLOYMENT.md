@@ -31,8 +31,10 @@ HOST=0.0.0.0
 PORT=8000
 LOG_LEVEL=info
 X402_FACILITATOR_URL=https://facilitator.bankofai.io
-FACILITATOR_API_KEY=MAIN_API_KEY
+X402_FACILITATOR_API_KEY=<facilitator-api-key>
 ```
+
+`FACILITATOR_API_KEY` is still accepted as a backward-compatible alias.
 
 ## Deploy
 
