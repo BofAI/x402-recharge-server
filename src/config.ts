@@ -57,7 +57,7 @@ export const settings = {
   host: envString("HOST", "0.0.0.0"),
   port: envNumber("PORT", 8000),
   logLevel: envString("LOG_LEVEL", "info"),
-  x402FacilitatorUrl: envString("X402_FACILITATOR_URL", "https://facilitator.bankofai.io"),
+  x402FacilitatorUrl: envString("X402_FACILITATOR_URL", "https://facilitator-v2.bankofai.io"),
   facilitatorApiKey: envString("X402_FACILITATOR_API_KEY", envString("FACILITATOR_API_KEY", "")),
   facilitatorTimeoutSeconds: envNumber("FACILITATOR_TIMEOUT_SECONDS", 10),
   facilitatorVerifyRetries: envNumber("FACILITATOR_VERIFY_RETRIES", 1),

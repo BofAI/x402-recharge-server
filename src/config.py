@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     request_body_max_bytes: int = Field(default=1_048_576)
 
     # x402 settlement facilitator
-    x402_facilitator_url: str = Field(default="https://facilitator.bankofai.io")
+    x402_facilitator_url: str = Field(default="https://facilitator-v2.bankofai.io")
     facilitator_api_key: str = Field(default="")
     facilitator_timeout_seconds: float = Field(default=10.0)
     facilitator_verify_retries: int = Field(default=1)
