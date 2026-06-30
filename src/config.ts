@@ -53,6 +53,7 @@ function envNumber(name: string, fallback: number): number {
 export const settings = {
   bankofaiEnv: envString("BANKOFAI_ENV", "prod"),
   tronRpcUrl: envString("TRON_RPC_URL", ""),
+  publicResourceBaseUrl: envString("PUBLIC_RESOURCE_BASE_URL", ""),
   host: envString("HOST", "0.0.0.0"),
   port: envNumber("PORT", 8000),
   logLevel: envString("LOG_LEVEL", "info"),

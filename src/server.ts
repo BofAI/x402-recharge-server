@@ -43,6 +43,14 @@ function isRateLimited(): boolean {
   return false;
 }
 
+function requestResourceUrl(req: Request): string {
+  const publicBaseUrl = settings.publicResourceBaseUrl.trim().replace(/\/+$/, "");
+  if (publicBaseUrl) {
+    return `${publicBaseUrl}${req.originalUrl}`;
+  }
+  return `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+}
+
 function rpcResult(id: unknown, result: Record<string, unknown>): Record<string, unknown> {
   return { jsonrpc: "2.0", id, result };
 }
@@ -281,7 +289,7 @@ async function handleX402Recharge(req: Request, res: Response): Promise<void> {
   let challenge;
   try {
     tokenSymbol = normalizeToken(token);
-    challenge = await buildRechargeChallenge(amount, tokenSymbol, `${req.protocol}://${req.get("host")}${req.originalUrl}`);
+    challenge = await buildRechargeChallenge(amount, tokenSymbol, requestResourceUrl(req));
   } catch (error) {
     res.status(400).json({
       error: "invalid_params",
