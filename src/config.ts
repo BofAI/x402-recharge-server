@@ -50,31 +50,8 @@ function envNumber(name: string, fallback: number): number {
   return parsed;
 }
 
-function isTestnetUrl(rawUrl: string): boolean {
-  if (!rawUrl.trim()) {
-    return false;
-  }
-  try {
-    const hostname = new URL(rawUrl).hostname.toLowerCase();
-    return hostname.startsWith("tn-") || hostname.includes(".tn-") || hostname.includes("testnet");
-  } catch {
-    return rawUrl.toLowerCase().includes("tn-") || rawUrl.toLowerCase().includes("testnet");
-  }
-}
-
-function inferredBankofaiEnv(): string {
-  const explicit = process.env.BANKOFAI_ENV?.trim();
-  if (explicit) {
-    return explicit;
-  }
-  if (isTestnetUrl(envString("X402_FACILITATOR_URL", "")) || isTestnetUrl(envString("PUBLIC_RESOURCE_BASE_URL", ""))) {
-    return "dev";
-  }
-  return "prod";
-}
-
 export const settings = {
-  bankofaiEnv: inferredBankofaiEnv(),
+  bankofaiEnv: envString("BANKOFAI_ENV", "prod"),
   tronRpcUrl: envString("TRON_RPC_URL", ""),
   publicResourceBaseUrl: envString("PUBLIC_RESOURCE_BASE_URL", ""),
   host: envString("HOST", "0.0.0.0"),
