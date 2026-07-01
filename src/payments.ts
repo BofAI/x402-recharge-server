@@ -179,6 +179,27 @@ async function withTimeout<T>(promise: Promise<T>, seconds: number, label: strin
   }
 }
 
+function facilitatorFailureMessage(error: unknown, label: string): string {
+  const raw = error instanceof Error ? error.message : String(error || "unknown");
+  if (raw.includes("timeout")) {
+    return `${label}: timeout`;
+  }
+  return `${label}: ${raw}`;
+}
+
+function logFacilitatorFailure(stage: "verify" | "settle", attempt: number, error: unknown, requirements: PaymentRequirements): void {
+  const raw = error instanceof Error ? error.message : String(error || "unknown");
+  console.warn("Facilitator %s failed attempt=%s network=%s scheme=%s asset=%s payTo=%s error=%s",
+    stage,
+    attempt,
+    requirements.network,
+    requirements.scheme,
+    requirements.asset,
+    requirements.payTo,
+    raw
+  );
+}
+
 export async function buildRechargeChallenge(amount: string, token: string, resourceUrl: string): Promise<PaymentRequired> {
   const tokenSymbol = normalizeToken(token);
   const amountText = parseRechargeAmount(amount);
@@ -346,10 +367,8 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
       lastError = undefined;
       break;
     } catch (error) {
-      const message = error instanceof Error && error.message.includes("timeout")
-        ? "facilitator verify failed: timeout"
-        : "facilitator verify failed: upstream_error";
-      lastError = new Error(message);
+      logFacilitatorFailure("verify", attempt + 1, error, requirements);
+      lastError = new Error(facilitatorFailureMessage(error, "facilitator verify failed"));
       if (attempt < settings.facilitatorVerifyRetries) {
         await new Promise((resolve) => setTimeout(resolve, settings.facilitatorRetryBackoffSeconds * 1000));
       }
@@ -370,9 +389,8 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
       "facilitator settle failed"
     );
   } catch (error) {
-    throw new Error(error instanceof Error && error.message.includes("timeout")
-      ? "facilitator settle failed: timeout"
-      : "facilitator settle failed: upstream_error");
+    logFacilitatorFailure("settle", 1, error, requirements);
+    throw new Error(facilitatorFailureMessage(error, "facilitator settle failed"));
   }
   if (!settlement.success) {
     const reason = settlement.errorReason ?? "transaction_failed_on_chain";

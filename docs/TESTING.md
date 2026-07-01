@@ -108,3 +108,18 @@ Failure conditions to capture:
 - `invalid_payment_signature`
 - `facilitator verify failed`
 - `facilitator settle failed`
+
+When a paid settlement fails, capture these response fields:
+
+- `error`
+- `failure_stage`
+- `failure_reason`
+- `detail`
+- `message`
+
+Also capture service logs that start with:
+
+```text
+Facilitator verify failed
+Facilitator settle failed
+```
