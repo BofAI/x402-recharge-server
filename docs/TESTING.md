@@ -1,10 +1,8 @@
-# Test Plan
+# Payment Test Plan
 
-This document is for QA/OP verification of the BANK OF AI x402 recharge MCP service.
+This document covers payment-only verification for the BANK OF AI x402 recharge service.
 
 ## Build Under Test
-
-Image:
 
 ```text
 docker.io/bankofai/x402-recharge-agent:dev
@@ -17,76 +15,44 @@ Digest:
 sha256:9bf4da10fc6265237ff15a3f3ee66e62c22b329a2132bc46b58cada26d329086
 ```
 
-Commit:
-
-```text
-6ca331e1d7239dada71e19b9487022f06c6658b7
-```
-
-## Environment
-
-Test domain:
-
-```text
-https://tn-recharge.bankofai.io
-```
-
-Required environment variables:
+## Payment Environment
 
 ```dotenv
 PUBLIC_RESOURCE_BASE_URL=https://tn-recharge.bankofai.io
 X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
 ```
 
-Optional environment variable:
+`X402_FACILITATOR_API_KEY` is optional and can be empty or omitted.
 
-```dotenv
-X402_FACILITATOR_API_KEY=
-```
+Do not inject `BANKOFAI_ENV=dev`. This test validates mainnet payment routes.
 
-Do not inject `BANKOFAI_ENV=dev` for this test. The service defaults to mainnet routes.
+## Expected Payment Routes
 
-## Scope
+For `USDT`, the payment challenge must include:
 
-Supported routes expected in the x402 challenge:
+- TRON mainnet: `tron:mainnet`
+- BNB Chain mainnet: `eip155:56`
 
-- TRON mainnet: `USDT`, `USDD`
-- BNB Chain mainnet: `USDT`
+Expected receiver addresses:
 
-For the `USDT` smoke test, the challenge must include:
+- TRON: `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
+- BNB Chain: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 
-- `tron:mainnet`
-- `eip155:56`
-
-## Smoke Tests
-
-### Health
+## 1. Facilitator Payment Route Check
 
 ```bash
-curl -i https://tn-recharge.bankofai.io/health
+curl -sS https://facilitator-v2.bankofai.io/supported \
+  | jq -r '.kinds[]? | select(.scheme=="exact") | .network'
 ```
 
-Expected:
+Expected output includes:
 
-- HTTP `200`
-- Body contains `"status":"ok"`
-- Body contains `"service":"x402-recharge-server"`
-
-### MCP Tool List
-
-```bash
-curl -i https://tn-recharge.bankofai.io/mcp \
-  -H 'content-type: application/json' \
-  -H 'accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```text
+tron:mainnet
+eip155:56
 ```
 
-Expected:
-
-- HTTP `200`
-- Response contains tool name `recharge`
-
-### x402 Recharge Challenge
+## 2. HTTP x402 Payment Challenge
 
 ```bash
 curl -i https://tn-recharge.bankofai.io/x402/recharge \
@@ -99,13 +65,13 @@ Expected:
 - HTTP `402`
 - Header `payment-required` exists
 - Body contains `"error":"Payment Required"`
-- Body contains `"resource":{"url":"https://tn-recharge.bankofai.io/x402/recharge"`
-- Body contains `"network":"tron:mainnet"`
-- Body contains `"network":"eip155:56"`
+- `resource.url` is `https://tn-recharge.bankofai.io/x402/recharge`
+- `accepts` contains `tron:mainnet`
+- `accepts` contains `eip155:56`
 - TRON `payTo` is `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
-- EVM `payTo` is `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
+- BNB Chain `payTo` is `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 
-### MCP Recharge Challenge
+## 3. MCP Recharge Payment Challenge
 
 ```bash
 curl -i https://tn-recharge.bankofai.io/mcp \
@@ -123,22 +89,22 @@ Expected:
 - `data.x402.accepts` contains `tron:mainnet`
 - `data.x402.accepts` contains `eip155:56`
 
-## Facilitator Check
+## 4. Optional Paid Settlement Test
 
-```bash
-curl -sS https://facilitator-v2.bankofai.io/supported \
-  | jq -r '.kinds[]? | select(.scheme=="exact") | .network'
-```
+Run this only with a funded wallet and a valid x402 client.
 
 Expected:
 
-```text
-tron:nile
-tron:mainnet
-eip155:97
-eip155:56
-```
+- Client receives `402 Payment Required`
+- Client signs a payment for one accepted route
+- Retry request includes the x402 payment header
+- Service calls facilitator `verify`
+- Service calls facilitator `settle`
+- Final response is successful and contains settlement details
 
-## Known Non-Blocking Warning
+Failure conditions to capture:
 
-The Docker CI currently reports a GitHub Actions warning about Node.js 20 deprecation in third-party actions. The Docker build and push completed successfully.
+- `insufficient_funds`
+- `invalid_payment_signature`
+- `facilitator verify failed`
+- `facilitator settle failed`
