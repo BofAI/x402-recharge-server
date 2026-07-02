@@ -27,7 +27,7 @@ For OP-managed deployments, inject only the environment-specific values:
 
 ```dotenv
 PUBLIC_RESOURCE_BASE_URL=https://tn-recharge.bankofai.io
-X402_FACILITATOR_URL=https://tn-facilitator.bankofai.io
+X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
 ```
 
 `X402_FACILITATOR_API_KEY` is optional. Set it only when the facilitator requires API key auth or higher rate limits.

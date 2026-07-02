@@ -6,14 +6,14 @@ This document covers payment-only verification for the BANK OF AI x402 recharge 
 
 ```text
 docker.io/bankofai/x402-recharge-agent:dev
-docker.io/bankofai/x402-recharge-agent:2.0.0-dev.13
+docker.io/bankofai/x402-recharge-agent:2.0.0-dev.14
 ```
 
 ## Payment Environment
 
 ```dotenv
 PUBLIC_RESOURCE_BASE_URL=https://tn-recharge.bankofai.io
-X402_FACILITATOR_URL=https://tn-facilitator.bankofai.io
+X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
 ```
 
 `X402_FACILITATOR_API_KEY` is optional and can be empty or omitted.
@@ -58,14 +58,16 @@ The facilitator is only the verifier/settler behind the TN server.
 ## 1. Facilitator Payment Route Check
 
 ```bash
-curl -sS https://tn-facilitator.bankofai.io/supported \
+curl -sS https://facilitator-v2.bankofai.io/supported \
   | jq -r '.kinds[]? | select(.scheme=="exact") | .network'
 ```
 
 Expected output includes:
 
 ```text
+tron:mainnet
 tron:nile
+eip155:56
 eip155:97
 ```
 
