@@ -15,10 +15,11 @@ import {
   PAYMENT_REQUIRED_HEADER,
   PAYMENT_RESPONSE_HEADER,
   PAYMENT_SIGNATURE_HEADER,
+  isSettlementPendingError,
   paymentFailureDetails,
   settleWithFacilitator
 } from "./payments.js";
-import { buildSuccessPayload, queryBalance, queryRechargeStatus } from "./bankofai.js";
+import { buildPendingPayload, buildSuccessPayload, queryBalance, queryRechargeStatus } from "./bankofai.js";
 import { networkConfig, settings } from "./config.js";
 
 const app = express();
@@ -108,6 +109,23 @@ async function paidRecharge(amount: string, token: string, paymentSignature: str
   });
 }
 
+async function pendingRecharge(error: unknown, token: string, amount: string): Promise<Record<string, unknown> | undefined> {
+  if (!isSettlementPendingError(error)) {
+    return undefined;
+  }
+  const txHash = String(error.settlement.transaction ?? "");
+  const bankofaiRecharge = await queryRechargeStatus(txHash, String(error.requirements.network));
+  return buildPendingPayload({
+    txHash,
+    token,
+    amount,
+    settlement: error.settlement,
+    mode: "trc20_x402",
+    requirements: error.requirements,
+    bankofaiRecharge
+  });
+}
+
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "x402-recharge-server",
@@ -136,6 +154,13 @@ function createMcpServer(): McpServer {
             structuredContent: success
           };
         } catch (error) {
+          const pending = await pendingRecharge(error, String(token), String(amount));
+          if (pending) {
+            return {
+              content: [{ type: "text", text: JSON.stringify(pending) }],
+              structuredContent: pending
+            };
+          }
           const details = paymentFailureDetails(error);
           return {
             isError: true,
@@ -240,6 +265,11 @@ app.post("/mcp", async (req: Request, res: Response) => {
         .set(PAYMENT_RESPONSE_HEADER, encodePaymentResponseHeader(settlement))
         .json(rpcResult(rechargeCall.id, success));
     } catch (error) {
+      const pending = await pendingRecharge(error, rechargeCall.token, rechargeCall.amount);
+      if (pending) {
+        res.status(202).json(rpcResult(rechargeCall.id, pending));
+        return;
+      }
       const details = paymentFailureDetails(error);
       res.status(400).json(rpcError(rechargeCall.id, -32003, "Payment verification failed", {
         error: "payment_verification_failed",
@@ -328,6 +358,11 @@ async function handleX402Recharge(req: Request, res: Response): Promise<void> {
       .set(PAYMENT_RESPONSE_HEADER, encodePaymentResponseHeader(settlement))
       .json(success);
   } catch (error) {
+    const pending = await pendingRecharge(error, tokenSymbol, amount);
+    if (pending) {
+      res.status(202).json(pending);
+      return;
+    }
     const details = paymentFailureDetails(error);
     res.status(400).json({
       error: "payment_verification_failed",

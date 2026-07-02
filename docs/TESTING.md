@@ -6,7 +6,7 @@ This document covers payment-only verification for the BANK OF AI x402 recharge 
 
 ```text
 docker.io/bankofai/x402-recharge-agent:dev
-docker.io/bankofai/x402-recharge-agent:2.0.0-dev.12
+docker.io/bankofai/x402-recharge-agent:2.0.0-dev.13
 ```
 
 ## Payment Environment
@@ -143,6 +143,8 @@ Failure conditions to capture:
 - `invalid_payment_signature`
 - `facilitator verify failed`
 - `facilitator settle failed`
+
+If the server returns HTTP `202` with `status=payment_pending`, the payment transaction has been submitted and the tester must not retry the payment. Capture `transaction_hash`, wait for chain confirmation, and verify recharge status with the same transaction.
 
 When a paid settlement fails, capture these response fields:
 

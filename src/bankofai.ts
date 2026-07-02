@@ -175,3 +175,47 @@ export function buildSuccessPayload(input: {
 
   return payload;
 }
+
+export function buildPendingPayload(input: {
+  txHash: string;
+  token: string;
+  amount: string;
+  settlement: SettleResponse;
+  mode: string;
+  requirements: PaymentRequirements;
+  bankofaiRecharge?: BankofaiPayload;
+}): Record<string, unknown> {
+  const txUrl = input.txHash ? txExplorerUrl(input.txHash, String(input.requirements.network)) : "";
+  const payload: Record<string, unknown> = {
+    status: "payment_pending",
+    recharge_status: "pending",
+    mode: input.mode,
+    message: txUrl
+      ? `Payment transaction was submitted but is not final yet. Do not retry payment. Wait for confirmation. Transaction: ${txUrl}`
+      : "Payment transaction was submitted but is not final yet. Do not retry payment. Wait for confirmation.",
+    retry_payment: false,
+    transaction_hash: input.txHash,
+    transaction_url: txUrl,
+    token: input.token.toUpperCase(),
+    amount: input.amount,
+    pay_to: input.requirements.payTo,
+    network: input.requirements.network,
+    verified: true,
+    settlement: input.settlement,
+    failure_stage: "settle",
+    failure_reason: input.settlement.errorReason ?? "invalid_transaction_state",
+    detail: input.settlement.errorMessage
+      ? `facilitator settle pending: ${input.settlement.errorReason}: ${input.settlement.errorMessage}`
+      : `facilitator settle pending: ${input.settlement.errorReason ?? "invalid_transaction_state"}`
+  };
+
+  if (input.bankofaiRecharge) {
+    payload.bankofai_recharge = input.bankofaiRecharge;
+    const status = String(input.bankofaiRecharge.status ?? "").trim().toLowerCase();
+    if (status) {
+      payload.recharge_status = status;
+    }
+  }
+
+  return payload;
+}

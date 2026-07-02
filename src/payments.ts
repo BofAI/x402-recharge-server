@@ -29,6 +29,20 @@ export type SettlementResult = {
   walletAddress: string;
 };
 
+export class SettlementPendingError extends Error {
+  readonly settlement: SettleResponse;
+  readonly requirements: PaymentRequirements;
+  readonly walletAddress: string;
+
+  constructor(message: string, settlement: SettleResponse, requirements: PaymentRequirements, walletAddress: string) {
+    super(message);
+    this.name = "SettlementPendingError";
+    this.settlement = settlement;
+    this.requirements = requirements;
+    this.walletAddress = walletAddress;
+  }
+}
+
 const facilitator = new HTTPFacilitatorClient({
   url: settings.x402FacilitatorUrl,
   createAuthHeaders: async () => {
@@ -161,6 +175,10 @@ export function paymentFailureDetails(error: unknown): PaymentFailureDetails {
     };
   }
   return { stage: "unknown", reason: raw, raw };
+}
+
+export function isSettlementPendingError(error: unknown): error is SettlementPendingError {
+  return error instanceof SettlementPendingError;
 }
 
 function timeoutSignal(seconds: number): AbortSignal {
@@ -397,6 +415,9 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
   if (!settlement.success) {
     const reason = settlement.errorReason ?? "transaction_failed_on_chain";
     const detail = settlement.errorMessage ? `${reason}: ${settlement.errorMessage}` : reason;
+    if (reason === "invalid_transaction_state" && settlement.transaction) {
+      throw new SettlementPendingError(`facilitator settle pending: ${detail}`, settlement, requirements, walletAddress);
+    }
     throw new Error(`facilitator settle failed: ${detail}`);
   }
   return { settlement, requirements, walletAddress };
