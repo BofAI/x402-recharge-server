@@ -4,15 +4,15 @@
 
 ## Overview
 
-BANK OF AI Payment Agent now exposes a single MCP recharge tool, `recharge`, and supports TRC20 tokens only.
+BANK OF AI Payment Agent now exposes a single MCP recharge tool, `recharge`, and runs on the TypeScript x402 SDK.
 
 ## Highlights
 
 **Single MCP Tool** — Agents now call `recharge(amount, token)` for all supported recharges.
 
-**TRC20 Automatic Payment** — When an agent calls `recharge`, the service returns HTTP 402 with an x402 challenge. After the agent signs and retries, the service verifies and settles on-chain via the Facilitator. Fully automatic for x402-compatible clients.
+**Automatic Payment** — When an agent calls `recharge`, the service returns HTTP 402 with an x402 challenge. After the agent signs and retries, the service verifies and settles on-chain via the Facilitator. Fully automatic for x402-compatible clients.
 
-**Environment-Based Deployment** — Runtime configuration now uses `BANKOFAI_ENV=dev|prod`. `dev` is for local verification, and `prod` is for TRON mainnet production recharge.
+**Mainnet Deployment** — Runtime configuration defaults to mainnet payment routes with `X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io`.
 
 ## Supported Mainnet Tokens
 
@@ -20,8 +20,7 @@ BANK OF AI Payment Agent now exposes a single MCP recharge tool, `recharge`, and
 |-------|---------|
 | USDT | TRON Mainnet |
 | USDD | TRON Mainnet |
-| USDC | TRON Mainnet |
-| NFT | TRON Mainnet |
+| USDT | BSC Mainnet |
 
 ## Getting Started
 
@@ -29,13 +28,14 @@ BANK OF AI Payment Agent now exposes a single MCP recharge tool, `recharge`, and
 git clone https://github.com/BofAI/x402-recharge-server.git
 cd x402-recharge-server
 cp .env.example .env
-pip install -r requirements.txt
-python server.py
+npm install
+npm run build
+npm start
 ```
 
 See [README.md](README.md) for full documentation.
 
 ## Known Limitations
 
-- No automated test suite yet (smoke test available via `./scripts/deploy.sh smoke`)
-- `shasta` testnet is intentionally unsupported
+- Smoke test available via `./scripts/deploy.sh smoke`
+- Testnet payment routes are intentionally not advertised by the server

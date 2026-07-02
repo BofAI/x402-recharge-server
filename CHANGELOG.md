@@ -29,5 +29,4 @@ Initial release of AINFT Merchant Agent.
 - REST top-up endpoints: `/x402/recharge`, `/x402/trc20/recharge`
 - Multi-network support: mainnet and Nile testnet (driven by `config/networks.json`)
 - Token support: USDT, USDD, USDC, NFT (mainnet); USDT, USDD (Nile)
-- ERC-8004 on-chain registration script (`scripts/register_8004.py`)
 - Docker deployment + one-command ops script (`scripts/deploy.sh`)

@@ -31,45 +31,10 @@ Supported env vars:
 - `BSC_AGENT_OPERATOR_KEY`
 - fallback: `AGENT_OPERATOR_KEY`
 
-## Register On TRON Mainnet
+## Registration Updates
 
-```bash
-python scripts/register_8004.py \
-  --chain tron \
-  --network mainnet \
-  --uri ipfs://<tron-cid>
-```
-
-## Register On BSC Mainnet
-
-```bash
-python scripts/register_8004.py \
-  --chain bsc \
-  --network eip155:56 \
-  --uri ipfs://<bsc-cid>
-```
-
-## Update Existing Agent URI
-
-TRON:
-
-```bash
-python scripts/register_8004.py \
-  --chain tron \
-  --network mainnet \
-  --agent-id <tron_agent_id> \
-  --uri ipfs://<new-tron-cid>
-```
-
-BSC:
-
-```bash
-python scripts/register_8004.py \
-  --chain bsc \
-  --network eip155:56 \
-  --agent-id <bsc_agent_id> \
-  --uri ipfs://<new-bsc-cid>
-```
+The TypeScript recharge server no longer ships an on-chain registration script.
+Use the BANK OF AI registration tooling to register or update agent metadata.
 
 ## Default Identity Registries
 
