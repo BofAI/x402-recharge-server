@@ -6,7 +6,7 @@ This document covers payment-only verification for the BANK OF AI x402 recharge 
 
 ```text
 docker.io/bankofai/x402-recharge-agent:dev
-docker.io/bankofai/x402-recharge-agent:2.0.0-dev.10
+docker.io/bankofai/x402-recharge-agent:2.0.0-dev.11
 ```
 
 ## Payment Environment
@@ -33,6 +33,24 @@ Expected receiver addresses:
 - TRON: `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
 - BNB Chain: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 - BNB Chain testnet: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
+
+Expected token addresses:
+
+- TRON mainnet USDT: `TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`
+- BNB Chain mainnet USDT: `0x55d398326f99059fF775485246999027B3197955`
+- BNB Chain testnet USDT: `0x337610d27c682E347C9cD60BD4b3b107C9d34dDd`
+
+## Mandatory Test Scope
+
+Testing must include one real paid request through the TN server:
+
+```text
+https://tn-recharge.bankofai.io/x402/recharge
+```
+
+Do not use a local server for the paid test.
+Do not call the facilitator directly as a replacement for the paid test.
+The facilitator is only the verifier/settler behind the TN server.
 
 ## 1. Facilitator Payment Route Check
 
@@ -89,18 +107,30 @@ Expected:
 - `data.x402.accepts` contains `eip155:56`
 - `data.x402.accepts` contains `eip155:97`
 
-## 4. Optional Paid Settlement Test
+## 4. Required Paid Settlement Test
 
-Run this only with a funded wallet and a valid x402 client.
+Run one successful paid request with a funded wallet and a valid x402 client.
+
+Required route:
+
+- BNB Chain testnet USDT
+- Network: `eip155:97`
+- Token: `0x337610d27c682E347C9cD60BD4b3b107C9d34dDd`
+- Receiver: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
+- Server URL: `https://tn-recharge.bankofai.io/x402/recharge`
+
+The test client must first request the TN server, receive HTTP `402`, sign the BSC testnet USDT payment, and retry the same TN server URL with the x402 payment header.
 
 Expected:
 
 - Client receives `402 Payment Required`
-- Client signs a payment for one accepted route
+- Client signs a payment for `eip155:97`
 - Retry request includes the x402 payment header
 - Service calls facilitator `verify`
 - Service calls facilitator `settle`
 - Final response is successful and contains settlement details
+
+The test is not complete until the final paid response from the TN server succeeds.
 
 Failure conditions to capture:
 
