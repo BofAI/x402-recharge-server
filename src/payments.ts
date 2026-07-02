@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Network, PaymentPayload, PaymentRequired, PaymentRequirements, SettleResponse } from "@bankofai/x402-core/types";
 import { HTTPFacilitatorClient } from "@bankofai/x402-core/http";
 import { decodePaymentSignatureHeader } from "@bankofai/x402-core/http";
-import { buildAssetExtra, getToken } from "@bankofai/x402-tron";
+import { getToken } from "@bankofai/x402-tron";
 import { getDefaultAsset } from "@bankofai/x402-evm";
 import { NetworkConfig, networkConfig, networkConfigs, settings } from "./config.js";
 
@@ -133,7 +133,14 @@ function decimalToSmallestUnit(amount: string, decimals: number): bigint {
 function paymentExtra(cfg: NetworkConfig, tokenSymbol: string): Record<string, unknown> {
   if (cfg.paymentNetwork.startsWith("tron:")) {
     const token = getToken(cfg.paymentNetwork as Network, tokenSymbol);
-    return token ? buildAssetExtra(token) : {};
+    if (!token) {
+      return {};
+    }
+    const includeTip712Domain = !token.assetTransferMethod || Boolean(token.supportsEip2612);
+    return {
+      ...(includeTip712Domain && token.version !== undefined ? { name: token.name, version: token.version } : {}),
+      ...(token.assetTransferMethod ? { assetTransferMethod: token.assetTransferMethod } : {})
+    };
   }
   if (cfg.paymentNetwork.startsWith("eip155:")) {
     const asset = getDefaultAsset(cfg.paymentNetwork as Network);
