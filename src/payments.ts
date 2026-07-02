@@ -5,6 +5,9 @@ import { decodePaymentSignatureHeader } from "@bankofai/x402-core/http";
 import { getToken } from "@bankofai/x402-tron";
 import { getDefaultAsset } from "@bankofai/x402-evm";
 import { NetworkConfig, networkConfig, networkConfigs, settings } from "./config.js";
+import { PaymentFlowError } from "./errors.js";
+import { DuplicatePaymentInProgressError, IdempotencyStore } from "./idempotency.js";
+import { logger } from "./logger.js";
 
 const ALLOWED_TRC20_TOKENS = new Set(["USDT", "USDD"]);
 const BSC_ALLOWED_TOKENS = new Set(["USDT"]);
@@ -16,12 +19,6 @@ export const PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED";
 export const PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE";
 export const PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE";
 export const BILL_URL = `${networkConfig.bankofaiWebUrl.replace(/\/+$/, "")}/purchase`;
-
-export type PaymentFailureDetails = {
-  stage: string;
-  reason: string;
-  raw: string;
-};
 
 type SupportedKind = {
   scheme?: string;
@@ -68,6 +65,7 @@ const facilitator = new HTTPFacilitatorClient({
 
 let supportedCache: { value: SupportedResponse; expiresAt: number } | undefined;
 const SUPPORTED_CACHE_TTL_MS = 60_000;
+const settlementIdempotency = new IdempotencyStore<SettlementResult>();
 
 async function getFacilitatorSupported(): Promise<SupportedResponse> {
   const now = Date.now();
@@ -110,7 +108,7 @@ export function normalizeToken(token: string | undefined): string {
   const tokenSymbol = (token || DEFAULT_TRC20_TOKEN).toUpperCase().trim();
   const allowed = supportedTokens();
   if (!allowed.includes(tokenSymbol)) {
-    throw new Error(`Unsupported TRC20 token: ${tokenSymbol}. Supported: ${allowed.join(", ")}`);
+    throw new PaymentFlowError("unknown", "unsupported_token", `Unsupported TRC20 token: ${tokenSymbol}. Supported: ${allowed.join(", ")}`);
   }
   return tokenSymbol;
 }
@@ -119,7 +117,7 @@ function parseDecimal(raw: string): { sign: 1 | -1; intPart: string; fracPart: s
   const trimmed = raw.trim();
   const match = trimmed.match(/^([+-])?(\d+)(?:\.(\d+))?$/);
   if (!match) {
-    throw new Error(`Invalid amount: ${raw}`);
+    throw new PaymentFlowError("unknown", "invalid_amount", `Invalid amount: ${raw}`);
   }
   return {
     sign: match[1] === "-" ? -1 : 1,
@@ -153,7 +151,7 @@ function compareDecimal(a: string, b: string): number {
 function parseRechargeAmount(amount: string): string {
   parseDecimal(amount);
   if (compareDecimal(amount, MIN_RECHARGE_AMOUNT) < 0 || compareDecimal(amount, MAX_RECHARGE_AMOUNT) > 0) {
-    throw new Error(`Amount must be between ${MIN_RECHARGE_AMOUNT} and ${MAX_RECHARGE_AMOUNT}.`);
+    throw new PaymentFlowError("unknown", "invalid_amount", `Amount must be between ${MIN_RECHARGE_AMOUNT} and ${MAX_RECHARGE_AMOUNT}.`);
   }
   return amount.trim();
 }
@@ -161,10 +159,10 @@ function parseRechargeAmount(amount: string): string {
 function decimalToSmallestUnit(amount: string, decimals: number): bigint {
   const parsed = parseDecimal(amount);
   if (parsed.sign < 0) {
-    throw new Error(`Invalid amount: ${amount}`);
+    throw new PaymentFlowError("unknown", "invalid_amount", `Invalid amount: ${amount}`);
   }
   if (parsed.fracPart.length > decimals) {
-    throw new Error(`Amount precision exceeds token decimals (${decimals}).`);
+    throw new PaymentFlowError("unknown", "invalid_amount_precision", `Amount precision exceeds token decimals (${decimals}).`);
   }
   const paddedFrac = parsed.fracPart.padEnd(decimals, "0");
   return BigInt(`${parsed.intPart}${paddedFrac}` || "0");
@@ -189,25 +187,6 @@ function paymentExtra(cfg: NetworkConfig, tokenSymbol: string): Record<string, u
   return {};
 }
 
-export function paymentFailureDetails(error: unknown): PaymentFailureDetails {
-  const raw = error instanceof Error ? error.message : String(error || "unknown");
-  if (raw.startsWith("facilitator verify failed:")) {
-    return {
-      stage: "verify",
-      reason: raw.split(":", 2)[1]?.trim() || "invalid_payment_signature",
-      raw
-    };
-  }
-  if (raw.startsWith("facilitator settle failed:")) {
-    return {
-      stage: "settle",
-      reason: raw.split(":", 2)[1]?.trim() || "transaction_failed_on_chain",
-      raw
-    };
-  }
-  return { stage: "unknown", reason: raw, raw };
-}
-
 export function isSettlementPendingError(error: unknown): error is SettlementPendingError {
   return error instanceof SettlementPendingError;
 }
@@ -226,25 +205,25 @@ async function withTimeout<T>(promise: Promise<T>, seconds: number, label: strin
   }
 }
 
-function facilitatorFailureMessage(error: unknown, label: string): string {
+function facilitatorFailureReason(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error || "unknown");
   if (raw.includes("timeout")) {
-    return `${label}: timeout`;
+    return "timeout";
   }
-  return `${label}: ${raw}`;
+  return "upstream_error";
 }
 
 function logFacilitatorFailure(stage: "verify" | "settle", attempt: number, error: unknown, requirements: PaymentRequirements): void {
   const raw = error instanceof Error ? error.message : String(error || "unknown");
-  console.warn("Facilitator %s failed attempt=%s network=%s scheme=%s asset=%s payTo=%s error=%s",
+  logger.warn("facilitator call failed", {
     stage,
     attempt,
-    requirements.network,
-    requirements.scheme,
-    requirements.asset,
-    requirements.payTo,
-    raw
-  );
+    network: requirements.network,
+    scheme: requirements.scheme,
+    asset: requirements.asset,
+    payTo: requirements.payTo,
+    error: raw
+  });
 }
 
 export async function buildRechargeChallenge(amount: string, token: string, resourceUrl: string): Promise<PaymentRequired> {
@@ -265,25 +244,23 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
     try {
       amountSmallest = decimalToSmallestUnit(amountText, tokenCfg.decimals);
     } catch (error) {
-      console.warn(
-        "Skipping payment route token=%s network=%s amount=%s: %s",
+      logger.warn("skipping payment route", {
         tokenSymbol,
-        cfg.paymentNetwork,
-        amountText,
-        error instanceof Error ? error.message : String(error)
-      );
+        network: cfg.paymentNetwork,
+        amount: amountText,
+        error: error instanceof Error ? error.message : String(error)
+      });
       continue;
     }
 
     if (amountSmallest < BigInt(tokenCfg.minimum)) {
-      console.warn(
-        "Skipping payment route token=%s network=%s amount=%s: below minimum smallest=%s minimum=%s",
+      logger.warn("skipping payment route below minimum", {
         tokenSymbol,
-        cfg.paymentNetwork,
-        amountText,
-        amountSmallest.toString(),
-        tokenCfg.minimum
-      );
+        network: cfg.paymentNetwork,
+        amount: amountText,
+        smallest: amountSmallest.toString(),
+        minimum: tokenCfg.minimum
+      });
       continue;
     }
 
@@ -299,29 +276,27 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
   }
 
   if (accepts.length === 0) {
-    throw new Error(`Token config missing for supported token: ${tokenSymbol}`);
+    throw new PaymentFlowError("unknown", "token_config_missing", `Token config missing for supported token: ${tokenSymbol}`);
   }
 
   let supported: SupportedResponse = {};
   try {
     supported = await getFacilitatorSupported();
   } catch (error) {
-    console.warn(
-      "Facilitator supported unavailable; advertising configured payment routes without facilitator extras: %s",
-      error instanceof Error ? error.message : String(error)
-    );
+    logger.warn("facilitator supported unavailable", {
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 
   const supportedKinds = supported.kinds ?? [];
   const filteredAccepts = accepts.map((accept) => {
     const supportedKind = supportedKinds.find((kind) => kind.scheme === accept.scheme && kind.network === accept.network);
     if (!supportedKind) {
-      console.warn(
-        "Advertising payment route token=%s network=%s asset=%s even though facilitator supported response did not include it",
+      logger.warn("advertising route not present in facilitator supported response", {
         tokenSymbol,
-        accept.network,
-        accept.asset
-      );
+        network: accept.network,
+        asset: accept.asset
+      });
       return accept;
     }
     return {
@@ -334,7 +309,7 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
   });
 
   if (filteredAccepts.length === 0) {
-    throw new Error(`No supported payment routes available for token: ${tokenSymbol}`);
+    throw new PaymentFlowError("unknown", "no_supported_payment_routes", `No supported payment routes available for token: ${tokenSymbol}`);
   }
 
   const extensions: Record<string, unknown> = {
@@ -375,7 +350,7 @@ function selectedRequirementFromPayload(payload: PaymentPayload, challenge: Paym
     String(item.payTo) === String(accepted.payTo)
   );
   if (!selected) {
-    throw new Error("facilitator verify failed: payment does not match any accepted requirement");
+    throw new PaymentFlowError("verify", "payment_requirement_mismatch", "payment does not match any accepted requirement");
   }
   return selected;
 }
@@ -398,12 +373,39 @@ function paymentWalletAddress(payload: PaymentPayload): string {
 }
 
 export async function settleWithFacilitator(paymentSignature: string, challenge: PaymentRequired): Promise<SettlementResult> {
-  const payload = decodePaymentSignatureHeader(paymentSignature);
+  let payload: PaymentPayload;
+  try {
+    payload = decodePaymentSignatureHeader(paymentSignature);
+  } catch (error) {
+    throw new PaymentFlowError("decode", "invalid_payment_signature", "payment signature could not be decoded", error);
+  }
   const walletAddress = paymentWalletAddress(payload);
   const requirements = selectedRequirementFromPayload(payload, challenge);
+  const idempotencyKey = settlementIdempotency.key(JSON.stringify({
+    signature: paymentSignature,
+    network: requirements.network,
+    asset: requirements.asset,
+    amount: requirements.amount,
+    payTo: requirements.payTo
+  }));
 
+  try {
+    return await settlementIdempotency.run(idempotencyKey, () => settleDecodedPayload(payload, requirements, walletAddress));
+  } catch (error) {
+    if (error instanceof DuplicatePaymentInProgressError) {
+      throw new PaymentFlowError("duplicate", "payment_already_processing", error.message, error);
+    }
+    throw error;
+  }
+}
+
+async function settleDecodedPayload(
+  payload: PaymentPayload,
+  requirements: PaymentRequirements,
+  walletAddress: string
+): Promise<SettlementResult> {
   let verifyResult;
-  let lastError: Error | undefined;
+  let lastError: PaymentFlowError | undefined;
   for (let attempt = 0; attempt <= settings.facilitatorVerifyRetries; attempt += 1) {
     try {
       verifyResult = await withTimeout(
@@ -415,7 +417,7 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
       break;
     } catch (error) {
       logFacilitatorFailure("verify", attempt + 1, error, requirements);
-      lastError = new Error(facilitatorFailureMessage(error, "facilitator verify failed"));
+      lastError = new PaymentFlowError("verify", facilitatorFailureReason(error), "facilitator verify failed", error);
       if (attempt < settings.facilitatorVerifyRetries) {
         await new Promise((resolve) => setTimeout(resolve, settings.facilitatorRetryBackoffSeconds * 1000));
       }
@@ -425,7 +427,7 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
     throw lastError;
   }
   if (!verifyResult?.isValid) {
-    throw new Error(`facilitator verify failed: ${verifyResult?.invalidReason ?? "invalid_payment_signature"}`);
+    throw new PaymentFlowError("verify", verifyResult?.invalidReason ?? "invalid_payment_signature", "facilitator verify failed");
   }
 
   let settlement: SettleResponse;
@@ -437,7 +439,7 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
     );
   } catch (error) {
     logFacilitatorFailure("settle", 1, error, requirements);
-    throw new Error(facilitatorFailureMessage(error, "facilitator settle failed"));
+    throw new PaymentFlowError("settle", facilitatorFailureReason(error), "facilitator settle failed", error);
   }
   if (!settlement.success) {
     const reason = settlement.errorReason ?? "transaction_failed_on_chain";
@@ -445,7 +447,7 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
     if (reason === "invalid_transaction_state" && settlement.transaction) {
       throw new SettlementPendingError(`facilitator settle pending: ${detail}`, settlement, requirements, walletAddress);
     }
-    throw new Error(`facilitator settle failed: ${detail}`);
+    throw new PaymentFlowError("settle", reason, `facilitator settle failed: ${detail}`);
   }
   return { settlement, requirements, walletAddress };
 }

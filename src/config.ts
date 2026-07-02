@@ -67,7 +67,8 @@ export const settings = {
   bankofaiMerchantKey: envString("BANKOFAI_MERCHANT_KEY", ""),
   bankofaiApiTimeoutSeconds: envNumber("BANKOFAI_API_TIMEOUT_SECONDS", 10),
   rateLimitPerMinute: envNumber("RATE_LIMIT_PER_MINUTE", 120),
-  requestBodyMaxBytes: envNumber("REQUEST_BODY_MAX_BYTES", 1_048_576)
+  requestBodyMaxBytes: envNumber("REQUEST_BODY_MAX_BYTES", 1_048_576),
+  trustProxyHops: envNumber("TRUST_PROXY_HOPS", 0)
 };
 
 export function activeNetworkName(): string {
