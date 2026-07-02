@@ -56,7 +56,7 @@ const facilitator = new HTTPFacilitatorClient({
 });
 
 function supportedPaymentNetworkConfigs(): NetworkConfig[] {
-  return ["mainnet", "nile", "bsc_mainnet", "bsc_testnet"]
+  return ["mainnet", "bsc_mainnet"]
     .filter((name) => networkConfigs[name])
     .map((name) => new NetworkConfig(name, networkConfigs));
 }
