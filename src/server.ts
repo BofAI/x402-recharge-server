@@ -25,6 +25,7 @@ import { networkConfig, settings } from "./config.js";
 const app = express();
 const rateLimitBucket: number[] = [];
 
+app.disable("x-powered-by");
 app.use(express.json({ limit: settings.requestBodyMaxBytes }));
 
 function isRateLimited(): boolean {
@@ -49,7 +50,42 @@ function requestResourceUrl(req: Request): string {
   if (publicBaseUrl) {
     return `${publicBaseUrl}${req.originalUrl}`;
   }
+  const host = req.get("host") ?? "";
+  const hostname = (() => {
+    if (host.startsWith("[")) {
+      return host.slice(0, host.indexOf("]") + 1).toLowerCase();
+    }
+    return host.split(":")[0]?.toLowerCase();
+  })();
+  if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname)) {
+    throw new Error("PUBLIC_RESOURCE_BASE_URL is required for non-local requests");
+  }
   return `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+}
+
+function configuredResourceUrl(path: string): string {
+  const publicBaseUrl = settings.publicResourceBaseUrl.trim().replace(/\/+$/, "");
+  if (publicBaseUrl) {
+    return `${publicBaseUrl}${path}`;
+  }
+  return `http://127.0.0.1:${settings.port}${path}`;
+}
+
+function publicPaymentFailure(details: ReturnType<typeof paymentFailureDetails>): Record<string, unknown> {
+  const reason = details.stage === "verify"
+    ? "invalid_payment_signature"
+    : details.stage === "settle"
+      ? "payment_settlement_failed"
+      : "invalid_payment";
+  return {
+    error: "payment_verification_failed",
+    failure_stage: details.stage,
+    failure_reason: reason,
+    detail: reason,
+    message: details.stage === "settle"
+      ? "Payment settlement failed. Do not retry automatically; check transaction status before creating a new payment."
+      : "Provided payment is invalid. Create a new payment and retry."
+  };
 }
 
 function rpcResult(id: unknown, result: Record<string, unknown>): Record<string, unknown> {
@@ -148,7 +184,7 @@ function createMcpServer(): McpServer {
       const signature = Array.isArray(paymentSignature) ? paymentSignature[0] : paymentSignature;
       if (signature) {
         try {
-          const success = await paidRecharge(String(amount), String(token), signature, "/mcp tools/call recharge");
+          const success = await paidRecharge(String(amount), String(token), signature, configuredResourceUrl("/mcp"));
           return {
             content: [{ type: "text", text: JSON.stringify(success) }],
             structuredContent: success
@@ -168,11 +204,7 @@ function createMcpServer(): McpServer {
               type: "text",
               text: JSON.stringify({
                 status: "payment_verification_failed",
-                error: "payment_verification_failed",
-                failure_stage: details.stage,
-                failure_reason: details.reason,
-                detail: details.raw,
-                message: "Provided payment is invalid or settlement failed. Create a new payment and retry."
+                ...publicPaymentFailure(details)
               })
             }]
           };
@@ -180,7 +212,7 @@ function createMcpServer(): McpServer {
       }
 
       const tokenSymbol = normalizeToken(String(token));
-      const challenge = await buildRechargeChallenge(String(amount), tokenSymbol, "/mcp tools/call recharge");
+      const challenge = await buildRechargeChallenge(String(amount), tokenSymbol, configuredResourceUrl("/mcp"));
       const result = {
         status: "payment_required",
         message: "Payment required. Call this tool through MCP HTTP /mcp to receive standard x402 402 headers.",
@@ -227,11 +259,13 @@ app.post("/mcp", async (req: Request, res: Response) => {
       challenge = await buildRechargeChallenge(
         rechargeCall.amount,
         rechargeCall.token,
-        "/mcp tools/call recharge"
+        requestResourceUrl(req)
       );
     } catch (error) {
       res.status(400).json(rpcError(rechargeCall.id, -32602, "Invalid params", {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error && error.message.includes("PUBLIC_RESOURCE_BASE_URL")
+          ? "Server is missing PUBLIC_RESOURCE_BASE_URL"
+          : error instanceof Error ? error.message : String(error)
       }));
       return;
     }
@@ -272,11 +306,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       }
       const details = paymentFailureDetails(error);
       res.status(400).json(rpcError(rechargeCall.id, -32003, "Payment verification failed", {
-        error: "payment_verification_failed",
-        failure_stage: details.stage,
-        failure_reason: details.reason,
-        detail: details.raw,
-        message: "Provided payment is invalid or settlement failed. Create a new payment and retry."
+        ...publicPaymentFailure(details)
       }));
     }
     return;
@@ -323,7 +353,9 @@ async function handleX402Recharge(req: Request, res: Response): Promise<void> {
   } catch (error) {
     res.status(400).json({
       error: "invalid_params",
-      message: error instanceof Error ? error.message : String(error)
+      message: error instanceof Error && error.message.includes("PUBLIC_RESOURCE_BASE_URL")
+        ? "Server is missing PUBLIC_RESOURCE_BASE_URL"
+        : error instanceof Error ? error.message : String(error)
     });
     return;
   }
@@ -365,11 +397,7 @@ async function handleX402Recharge(req: Request, res: Response): Promise<void> {
     }
     const details = paymentFailureDetails(error);
     res.status(400).json({
-      error: "payment_verification_failed",
-      failure_stage: details.stage,
-      failure_reason: details.reason,
-      detail: details.raw,
-      message: "Provided payment is invalid or settlement failed. Create a new payment and retry."
+      ...publicPaymentFailure(details)
     });
   }
 }

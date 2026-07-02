@@ -141,7 +141,8 @@ export function buildSuccessPayload(input: {
   const txUrl = input.txHash ? txExplorerUrl(input.txHash, String(input.requirements.network)) : "";
   const payload: Record<string, unknown> = {
     status: "paid",
-    recharge_status: "success",
+    payment_status: "settled",
+    recharge_status: "unconfirmed",
     mode: input.mode,
     message: txUrl
       ? `Recharge successful. View your bill at ${BILL_URL}. Transaction: ${txUrl}`

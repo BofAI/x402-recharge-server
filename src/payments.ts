@@ -23,6 +23,17 @@ export type PaymentFailureDetails = {
   raw: string;
 };
 
+type SupportedKind = {
+  scheme?: string;
+  network?: string;
+  extra?: Record<string, unknown>;
+};
+
+type SupportedResponse = {
+  kinds?: SupportedKind[];
+  extensions?: string[];
+};
+
 export type SettlementResult = {
   settlement: SettleResponse;
   requirements: PaymentRequirements;
@@ -54,6 +65,26 @@ const facilitator = new HTTPFacilitatorClient({
     };
   }
 });
+
+let supportedCache: { value: SupportedResponse; expiresAt: number } | undefined;
+const SUPPORTED_CACHE_TTL_MS = 60_000;
+
+async function getFacilitatorSupported(): Promise<SupportedResponse> {
+  const now = Date.now();
+  if (supportedCache && supportedCache.expiresAt > now) {
+    return supportedCache.value;
+  }
+  const supported = await withTimeout(
+    facilitator.getSupported(),
+    settings.facilitatorTimeoutSeconds,
+    "facilitator supported failed"
+  ) as SupportedResponse;
+  supportedCache = {
+    value: supported,
+    expiresAt: now + SUPPORTED_CACHE_TTL_MS
+  };
+  return supported;
+}
 
 function supportedPaymentNetworkConfigs(): NetworkConfig[] {
   return ["mainnet", "bsc_mainnet"]
@@ -181,10 +212,6 @@ export function isSettlementPendingError(error: unknown): error is SettlementPen
   return error instanceof SettlementPendingError;
 }
 
-function timeoutSignal(seconds: number): AbortSignal {
-  return AbortSignal.timeout(Math.max(1, seconds) * 1000);
-}
-
 async function withTimeout<T>(promise: Promise<T>, seconds: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -275,15 +302,15 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
     throw new Error(`Token config missing for supported token: ${tokenSymbol}`);
   }
 
-  const supported = await withTimeout(
-    facilitator.getSupported(),
-    settings.facilitatorTimeoutSeconds,
-    "facilitator supported failed"
-  ).catch((error) => {
-    throw new Error(error instanceof Error && error.message.includes("timeout")
-      ? "facilitator supported failed: timeout"
-      : "facilitator supported failed: upstream_error");
-  });
+  let supported: SupportedResponse = {};
+  try {
+    supported = await getFacilitatorSupported();
+  } catch (error) {
+    console.warn(
+      "Facilitator supported unavailable; advertising configured payment routes without facilitator extras: %s",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
 
   const supportedKinds = supported.kinds ?? [];
   const filteredAccepts = accepts.map((accept) => {
@@ -444,14 +471,8 @@ export function bankofaiChainId(paymentNetwork: string): string {
   if (paymentNetwork === "tron:mainnet") {
     return "eip155:728126428";
   }
-  if (paymentNetwork === "tron:nile") {
-    return "eip155:3448148188";
-  }
   if (paymentNetwork === "eip155:56") {
     return "eip155:56";
-  }
-  if (paymentNetwork === "eip155:97") {
-    return "eip155:97";
   }
   throw new Error(`Unsupported chain mapping for payment network: ${paymentNetwork}`);
 }

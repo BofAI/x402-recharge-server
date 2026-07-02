@@ -72,13 +72,10 @@ export const settings = {
 
 export function activeNetworkName(): string {
   const env = settings.bankofaiEnv.toLowerCase().trim();
-  if (env === "dev") {
-    return "nile";
-  }
   if (env === "prod") {
     return "mainnet";
   }
-  throw new Error(`Invalid BANKOFAI_ENV: ${settings.bankofaiEnv}. Expected: dev | prod`);
+  throw new Error(`Invalid BANKOFAI_ENV: ${settings.bankofaiEnv}. This server only supports BANKOFAI_ENV=prod.`);
 }
 
 export const networkConfigs: NetworkConfigs = JSON.parse(

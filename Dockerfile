@@ -21,6 +21,9 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY config ./config
 
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 8000
 
 CMD ["node", "dist/server.js"]

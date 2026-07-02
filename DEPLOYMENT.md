@@ -60,7 +60,6 @@ Expected:
 - HTTP `402 Payment Required`
 - `TRON mainnet` route for `USDT`
 - `BSC mainnet` route for `USDT`
-- `BSC testnet` route for `USDT`
 
 For `USDD`, expected route is:
 

@@ -14,9 +14,9 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@bankofai/x402-core": "1.0.0-beta.6",
-    "@bankofai/x402-evm": "1.0.0-beta.6",
-    "@bankofai/x402-tron": "1.0.0-beta.6",
+    "@bankofai/x402-core": "^1.0.0",
+    "@bankofai/x402-evm": "^1.0.0",
+    "@bankofai/x402-tron": "^1.0.0",
     "@modelcontextprotocol/sdk": "1.29.0",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
@@ -26,9 +26,9 @@
     "@bankofai/agent-wallet": "^2.4.0",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.4",
-    "tronweb": "^6.3.0",
+    "tronweb": "^6.4.0",
     "tsx": "^4.21.0",
     "typescript": "^5.7.3",
-    "viem": "^2.53.1"
+    "viem": "^2.54.1"
   }
 }
