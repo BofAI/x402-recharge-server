@@ -6,7 +6,7 @@ This document covers payment-only verification for the BANK OF AI x402 recharge 
 
 ```text
 docker.io/bankofai/x402-recharge-agent:dev
-docker.io/bankofai/x402-recharge-agent:2.0.0-dev.11
+docker.io/bankofai/x402-recharge-agent:2.0.0-dev.12
 ```
 
 ## Payment Environment
@@ -18,25 +18,28 @@ X402_FACILITATOR_URL=https://tn-facilitator.bankofai.io
 
 `X402_FACILITATOR_API_KEY` is optional and can be empty or omitted.
 
-Do not inject `BANKOFAI_ENV=dev`. This test validates mainnet payment routes.
+Do not inject `BANKOFAI_ENV=dev`. This test validates simultaneous mainnet and testnet payment routes.
 
 ## Expected Payment Routes
 
 For `USDT`, the payment challenge must include:
 
 - TRON mainnet: `tron:mainnet`
+- TRON Nile testnet: `tron:nile`
 - BNB Chain mainnet: `eip155:56`
 - BNB Chain testnet: `eip155:97`
 
 Expected receiver addresses:
 
-- TRON: `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
-- BNB Chain: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
+- TRON mainnet: `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
+- TRON Nile testnet: `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
+- BNB Chain mainnet: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 - BNB Chain testnet: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 
 Expected token addresses:
 
 - TRON mainnet USDT: `TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`
+- TRON Nile testnet USDT: `TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf`
 - BNB Chain mainnet USDT: `0x55d398326f99059fF775485246999027B3197955`
 - BNB Chain testnet USDT: `0x337610d27c682E347C9cD60BD4b3b107C9d34dDd`
 
@@ -62,6 +65,7 @@ curl -sS https://tn-facilitator.bankofai.io/supported \
 Expected output includes:
 
 ```text
+tron:nile
 eip155:97
 ```
 
@@ -80,10 +84,12 @@ Expected:
 - Body contains `"error":"Payment Required"`
 - `resource.url` is `https://tn-recharge.bankofai.io/x402/recharge`
 - `accepts` contains `tron:mainnet`
+- `accepts` contains `tron:nile`
 - `accepts` contains `eip155:56`
 - `accepts` contains `eip155:97`
-- TRON `payTo` is `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
-- BNB Chain `payTo` is `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
+- TRON mainnet `payTo` is `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
+- TRON Nile testnet `payTo` is `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
+- BNB Chain mainnet `payTo` is `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 - BNB Chain testnet `payTo` is `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 
 ## 3. MCP Recharge Payment Challenge
@@ -102,6 +108,7 @@ Expected:
 - JSON-RPC error code is `-32002`
 - Error message is `Payment Required`
 - `data.x402.accepts` contains `tron:mainnet`
+- `data.x402.accepts` contains `tron:nile`
 - `data.x402.accepts` contains `eip155:56`
 - `data.x402.accepts` contains `eip155:97`
 

@@ -42,14 +42,9 @@ const facilitator = new HTTPFacilitatorClient({
 });
 
 function supportedPaymentNetworkConfigs(): NetworkConfig[] {
-  const configs = [networkConfig];
-  if (networkConfigs.bsc_testnet) {
-    configs.push(new NetworkConfig("bsc_testnet", networkConfigs));
-  }
-  if (settings.bankofaiEnv.toLowerCase().trim() === "prod" && networkConfigs.bsc_mainnet) {
-    configs.push(new NetworkConfig("bsc_mainnet", networkConfigs));
-  }
-  return configs;
+  return ["mainnet", "nile", "bsc_mainnet", "bsc_testnet"]
+    .filter((name) => networkConfigs[name])
+    .map((name) => new NetworkConfig(name, networkConfigs));
 }
 
 export function supportedTokens(): string[] {
@@ -273,24 +268,24 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
   });
 
   const supportedKinds = supported.kinds ?? [];
-  const filteredAccepts = accepts.flatMap((accept) => {
+  const filteredAccepts = accepts.map((accept) => {
     const supportedKind = supportedKinds.find((kind) => kind.scheme === accept.scheme && kind.network === accept.network);
     if (!supportedKind) {
       console.warn(
-        "Skipping unsupported payment route token=%s network=%s asset=%s because facilitator supported response did not include it",
+        "Advertising payment route token=%s network=%s asset=%s even though facilitator supported response did not include it",
         tokenSymbol,
         accept.network,
         accept.asset
       );
-      return [];
+      return accept;
     }
-    return [{
+    return {
       ...accept,
       extra: {
         ...(supportedKind.extra ?? {}),
         ...(accept.extra ?? {})
       }
-    }];
+    };
   });
 
   if (filteredAccepts.length === 0) {
