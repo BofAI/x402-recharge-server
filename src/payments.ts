@@ -43,7 +43,10 @@ const facilitator = new HTTPFacilitatorClient({
 
 function supportedPaymentNetworkConfigs(): NetworkConfig[] {
   const configs = [networkConfig];
-  if (settings.bankofaiEnv.toLowerCase().trim() === "dev" && networkConfigs.bsc_testnet) {
+  if (
+    (settings.bankofaiEnv.toLowerCase().trim() === "dev" || settings.enableBscTestnetPayments) &&
+    networkConfigs.bsc_testnet
+  ) {
     configs.push(new NetworkConfig("bsc_testnet", networkConfigs));
   }
   if (settings.bankofaiEnv.toLowerCase().trim() === "prod" && networkConfigs.bsc_mainnet) {

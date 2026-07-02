@@ -6,13 +6,7 @@ This document covers payment-only verification for the BANK OF AI x402 recharge 
 
 ```text
 docker.io/bankofai/x402-recharge-agent:dev
-docker.io/bankofai/x402-recharge-agent:2.0.0-dev.6
-```
-
-Digest:
-
-```text
-sha256:9bf4da10fc6265237ff15a3f3ee66e62c22b329a2132bc46b58cada26d329086
+docker.io/bankofai/x402-recharge-agent:2.0.0-dev.9
 ```
 
 ## Payment Environment
@@ -20,6 +14,7 @@ sha256:9bf4da10fc6265237ff15a3f3ee66e62c22b329a2132bc46b58cada26d329086
 ```dotenv
 PUBLIC_RESOURCE_BASE_URL=https://tn-recharge.bankofai.io
 X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
+ENABLE_BSC_TESTNET_PAYMENTS=true
 ```
 
 `X402_FACILITATOR_API_KEY` is optional and can be empty or omitted.
@@ -32,11 +27,13 @@ For `USDT`, the payment challenge must include:
 
 - TRON mainnet: `tron:mainnet`
 - BNB Chain mainnet: `eip155:56`
+- BNB Chain testnet: `eip155:97`
 
 Expected receiver addresses:
 
 - TRON: `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
 - BNB Chain: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
+- BNB Chain testnet: `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 
 ## 1. Facilitator Payment Route Check
 
@@ -50,6 +47,7 @@ Expected output includes:
 ```text
 tron:mainnet
 eip155:56
+eip155:97
 ```
 
 ## 2. HTTP x402 Payment Challenge
@@ -68,8 +66,10 @@ Expected:
 - `resource.url` is `https://tn-recharge.bankofai.io/x402/recharge`
 - `accepts` contains `tron:mainnet`
 - `accepts` contains `eip155:56`
+- `accepts` contains `eip155:97`
 - TRON `payTo` is `TNMxHxRTFrPHuVqe4BHE59fGfDMfpLxXrb`
 - BNB Chain `payTo` is `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
+- BNB Chain testnet `payTo` is `0x0c80ac6bcd78dfd1ab8d711c75dfe2c891f23214`
 
 ## 3. MCP Recharge Payment Challenge
 
@@ -88,6 +88,7 @@ Expected:
 - Error message is `Payment Required`
 - `data.x402.accepts` contains `tron:mainnet`
 - `data.x402.accepts` contains `eip155:56`
+- `data.x402.accepts` contains `eip155:97`
 
 ## 4. Optional Paid Settlement Test
 
