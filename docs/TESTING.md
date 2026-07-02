@@ -6,7 +6,7 @@ This document covers payment-only verification for the BANK OF AI x402 recharge 
 
 ```text
 docker.io/bankofai/x402-recharge-agent:dev
-docker.io/bankofai/x402-recharge-agent:2.0.0-dev.9
+docker.io/bankofai/x402-recharge-agent:2.0.0-dev.10
 ```
 
 ## Payment Environment
@@ -14,7 +14,6 @@ docker.io/bankofai/x402-recharge-agent:2.0.0-dev.9
 ```dotenv
 PUBLIC_RESOURCE_BASE_URL=https://tn-recharge.bankofai.io
 X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
-ENABLE_BSC_TESTNET_PAYMENTS=true
 ```
 
 `X402_FACILITATOR_API_KEY` is optional and can be empty or omitted.

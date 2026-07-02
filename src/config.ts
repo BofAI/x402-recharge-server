@@ -50,24 +50,8 @@ function envNumber(name: string, fallback: number): number {
   return parsed;
 }
 
-function envBoolean(name: string, fallback = false): boolean {
-  const raw = process.env[name];
-  if (raw === undefined || raw.trim() === "") {
-    return fallback;
-  }
-  const normalized = raw.trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-  throw new Error(`Invalid boolean env var ${name}: ${raw}`);
-}
-
 export const settings = {
   bankofaiEnv: envString("BANKOFAI_ENV", "prod"),
-  enableBscTestnetPayments: envBoolean("ENABLE_BSC_TESTNET_PAYMENTS", false),
   tronRpcUrl: envString("TRON_RPC_URL", ""),
   publicResourceBaseUrl: envString("PUBLIC_RESOURCE_BASE_URL", ""),
   host: envString("HOST", "0.0.0.0"),

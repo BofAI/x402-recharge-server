@@ -33,12 +33,6 @@ X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
 `X402_FACILITATOR_API_KEY` is optional. Set it only when the facilitator requires API key auth or higher rate limits.
 `FACILITATOR_API_KEY` is still accepted as a backward-compatible alias.
 
-For TN/staging deployments that should also accept BSC testnet USDT, set:
-
-```dotenv
-ENABLE_BSC_TESTNET_PAYMENTS=true
-```
-
 ## Deploy
 
 ```bash
@@ -66,6 +60,7 @@ Expected:
 - HTTP `402 Payment Required`
 - `TRON mainnet` route for `USDT`
 - `BSC mainnet` route for `USDT`
+- `BSC testnet` route for `USDT`
 
 For `USDD`, expected route is:
 
