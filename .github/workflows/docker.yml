@@ -38,6 +38,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=dev,enable=${{ contains(github.ref, '-dev') }}
             type=raw,value=beta,enable=${{ contains(github.ref, 'beta') }}
             type=sha,format=long
 

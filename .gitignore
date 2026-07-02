@@ -37,6 +37,7 @@ data/
 # IDE
 .vscode/
 .idea/
+.agents/
 *.swp
 *.swo
 *~
@@ -53,3 +54,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Node
+node_modules/
+npm-debug.log*

@@ -28,44 +28,15 @@ Production MCP endpoint:
 https://recharge.bankofai.io/mcp
 ```
 
-## MCP Clients
+## Install MCP
 
-**Claude Desktop / Claude Code / Cursor:**
+Tested with `add-mcp` for Codex, Claude Code, and OpenCode:
 
-```json
-{
-  "mcpServers": {
-    "x402-recharge-server": {
-      "url": "https://recharge.bankofai.io/mcp"
-    }
-  }
-}
+```bash
+npx add-mcp https://recharge.bankofai.io/mcp
 ```
 
-**Antigravity:**
-
-```json
-{
-  "mcpServers": {
-    "x402-recharge-server": {
-      "serverUrl": "https://recharge.bankofai.io/mcp"
-    }
-  }
-}
-```
-
-**OpenCode:**
-
-```json
-{
-  "mcp": {
-    "x402-recharge-server": {
-      "type": "remote",
-      "url": "https://recharge.bankofai.io/mcp"
-    }
-  }
-}
-```
+If you deploy this service on another BANK OF AI subdomain, replace the host accordingly.
 
 ## Quick Start
 
@@ -76,10 +47,9 @@ git clone https://github.com/BofAI/x402-recharge-server.git
 cd x402-recharge-server
 cp .env.example .env
 
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python server.py
+npm install
+npm run build
+npm start
 ```
 
 Local MCP endpoint:

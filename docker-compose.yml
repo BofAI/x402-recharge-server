@@ -6,16 +6,17 @@ services:
     container_name: x402-recharge-server
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       BANKOFAI_ENV: ${BANKOFAI_ENV:-prod}
       HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-8000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:${PORT:-8000}"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; req=urllib.request.Request('http://127.0.0.1:8000/mcp', data=b'{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}', headers={'content-type':'application/json','accept':'application/json, text/event-stream'}); urllib.request.urlopen(req, timeout=3).read()"]
+      test: ["CMD-SHELL", "node -e \"const port=process.env.PORT||8000; fetch('http://127.0.0.1:'+port+'/mcp',{method:'POST',headers:{'content-type':'application/json','accept':'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})}).then(async r=>{const t=await r.text(); if(!r.ok||!t.includes('recharge')) process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
