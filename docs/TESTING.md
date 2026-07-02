@@ -13,7 +13,7 @@ docker.io/bankofai/x402-recharge-agent:2.0.0-dev.11
 
 ```dotenv
 PUBLIC_RESOURCE_BASE_URL=https://tn-recharge.bankofai.io
-X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
+X402_FACILITATOR_URL=https://tn-facilitator.bankofai.io
 ```
 
 `X402_FACILITATOR_API_KEY` is optional and can be empty or omitted.
@@ -55,15 +55,13 @@ The facilitator is only the verifier/settler behind the TN server.
 ## 1. Facilitator Payment Route Check
 
 ```bash
-curl -sS https://facilitator-v2.bankofai.io/supported \
+curl -sS https://tn-facilitator.bankofai.io/supported \
   | jq -r '.kinds[]? | select(.scheme=="exact") | .network'
 ```
 
 Expected output includes:
 
 ```text
-tron:mainnet
-eip155:56
 eip155:97
 ```
 
