@@ -56,7 +56,7 @@ function defaultFacilitatorUrl(bankofaiEnv: string): string {
     : "https://facilitator.bankofai.io";
 }
 
-const bankofaiEnv = envString("BANKOFAI_ENV", "prod");
+const bankofaiEnv = envString("BANKOFAI_ENV", "dev");
 
 export const settings = {
   bankofaiEnv,
