@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Network, PaymentPayload, PaymentRequired, PaymentRequirements, SettleResponse } from "@bankofai/x402-core/types";
 import { HTTPFacilitatorClient } from "@bankofai/x402-core/http";
 import { decodePaymentSignatureHeader } from "@bankofai/x402-core/http";
-import { buildAssetExtra, getToken } from "@bankofai/x402-tron";
+import { getToken, TRON_MAINNET, TRON_NILE } from "@bankofai/x402-tron";
 import { getDefaultAsset } from "@bankofai/x402-evm";
 import { NetworkConfig, networkConfig, networkConfigs, settings } from "./config.js";
 
@@ -130,10 +130,27 @@ function decimalToSmallestUnit(amount: string, decimals: number): bigint {
   return BigInt(`${parsed.intPart}${paddedFrac}` || "0");
 }
 
+function sdkTronNetwork(paymentNetwork: string): Network {
+  if (paymentNetwork === "tron:mainnet") {
+    return TRON_MAINNET as Network;
+  }
+  if (paymentNetwork === "tron:nile") {
+    return TRON_NILE as Network;
+  }
+  return paymentNetwork as Network;
+}
+
 function paymentExtra(cfg: NetworkConfig, tokenSymbol: string): Record<string, unknown> {
   if (cfg.paymentNetwork.startsWith("tron:")) {
-    const token = getToken(cfg.paymentNetwork as Network, tokenSymbol);
-    return token ? buildAssetExtra(token) : {};
+    const token = getToken(sdkTronNetwork(cfg.paymentNetwork), tokenSymbol);
+    if (!token) {
+      return {};
+    }
+    const includeTip712Domain = !token.assetTransferMethod || Boolean(token.supportsEip2612);
+    return {
+      ...(includeTip712Domain && token.version !== undefined ? { name: token.name, version: token.version } : {}),
+      ...(token.assetTransferMethod ? { assetTransferMethod: token.assetTransferMethod } : {})
+    };
   }
   if (cfg.paymentNetwork.startsWith("eip155:")) {
     const asset = getDefaultAsset(cfg.paymentNetwork as Network);
@@ -400,10 +417,10 @@ export function txExplorerUrl(txHash: string, paymentNetwork: string): string {
 }
 
 export function bankofaiChainId(paymentNetwork: string): string {
-  if (paymentNetwork === "tron:mainnet") {
+  if (paymentNetwork === TRON_MAINNET || paymentNetwork === "tron:mainnet") {
     return "eip155:728126428";
   }
-  if (paymentNetwork === "tron:nile") {
+  if (paymentNetwork === TRON_NILE || paymentNetwork === "tron:nile") {
     return "eip155:3448148188";
   }
   if (paymentNetwork === "eip155:56") {
