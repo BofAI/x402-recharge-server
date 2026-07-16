@@ -50,13 +50,21 @@ function envNumber(name: string, fallback: number): number {
   return parsed;
 }
 
+function defaultFacilitatorUrl(bankofaiEnv: string): string {
+  return bankofaiEnv.toLowerCase().trim() === "dev"
+    ? "https://tn-facilitator.bankofai.io"
+    : "https://facilitator.bankofai.io";
+}
+
+const bankofaiEnv = envString("BANKOFAI_ENV", "prod");
+
 export const settings = {
-  bankofaiEnv: envString("BANKOFAI_ENV", "prod"),
+  bankofaiEnv,
   tronRpcUrl: envString("TRON_RPC_URL", ""),
   host: envString("HOST", "0.0.0.0"),
   port: envNumber("PORT", 8000),
   logLevel: envString("LOG_LEVEL", "info"),
-  x402FacilitatorUrl: envString("X402_FACILITATOR_URL", "https://facilitator.bankofai.io"),
+  x402FacilitatorUrl: envString("X402_FACILITATOR_URL", defaultFacilitatorUrl(bankofaiEnv)),
   facilitatorApiKey: envString("FACILITATOR_API_KEY", ""),
   facilitatorTimeoutSeconds: envNumber("FACILITATOR_TIMEOUT_SECONDS", 10),
   facilitatorVerifyRetries: envNumber("FACILITATOR_VERIFY_RETRIES", 1),

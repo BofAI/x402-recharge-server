@@ -140,6 +140,15 @@ function sdkTronNetwork(paymentNetwork: string): Network {
   return paymentNetwork as Network;
 }
 
+function facilitatorNetworkCandidates(paymentNetwork: string): Network[] {
+  const candidates = [paymentNetwork as Network];
+  const sdkNetwork = sdkTronNetwork(paymentNetwork);
+  if (!candidates.includes(sdkNetwork)) {
+    candidates.push(sdkNetwork);
+  }
+  return candidates;
+}
+
 function paymentExtra(cfg: NetworkConfig, tokenSymbol: string): Record<string, unknown> {
   if (cfg.paymentNetwork.startsWith("tron:")) {
     const token = getToken(sdkTronNetwork(cfg.paymentNetwork), tokenSymbol);
@@ -263,7 +272,9 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
 
   const supportedKinds = supported.kinds ?? [];
   const filteredAccepts = accepts.flatMap((accept) => {
-    const supportedKind = supportedKinds.find((kind) => kind.scheme === accept.scheme && kind.network === accept.network);
+    const supportedKind = supportedKinds.find((kind) =>
+      kind.scheme === accept.scheme && facilitatorNetworkCandidates(String(accept.network)).includes(kind.network)
+    );
     if (!supportedKind) {
       console.warn(
         "Skipping unsupported payment route token=%s network=%s asset=%s because facilitator supported response did not include it",
@@ -275,6 +286,7 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
     }
     return [{
       ...accept,
+      network: supportedKind.network,
       extra: {
         ...(supportedKind.extra ?? {}),
         ...(accept.extra ?? {})
