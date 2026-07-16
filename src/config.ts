@@ -57,6 +57,9 @@ function defaultFacilitatorUrl(bankofaiEnv: string): string {
 }
 
 const bankofaiEnv = envString("BANKOFAI_ENV", "dev");
+const x402FacilitatorUrl = bankofaiEnv.toLowerCase().trim() === "dev"
+  ? defaultFacilitatorUrl(bankofaiEnv)
+  : envString("X402_FACILITATOR_URL", defaultFacilitatorUrl(bankofaiEnv));
 
 export const settings = {
   bankofaiEnv,
@@ -64,7 +67,7 @@ export const settings = {
   host: envString("HOST", "0.0.0.0"),
   port: envNumber("PORT", 8000),
   logLevel: envString("LOG_LEVEL", "info"),
-  x402FacilitatorUrl: envString("X402_FACILITATOR_URL", defaultFacilitatorUrl(bankofaiEnv)),
+  x402FacilitatorUrl,
   facilitatorApiKey: envString("FACILITATOR_API_KEY", ""),
   facilitatorTimeoutSeconds: envNumber("FACILITATOR_TIMEOUT_SECONDS", 10),
   facilitatorVerifyRetries: envNumber("FACILITATOR_VERIFY_RETRIES", 1),
