@@ -413,7 +413,10 @@ export async function settleWithFacilitator(paymentSignature: string, challenge:
 
 export function findNetworkConfigByPaymentNetwork(paymentNetwork: string): NetworkConfig {
   for (const cfg of supportedPaymentNetworkConfigs()) {
-    if (String(cfg.paymentNetwork) === String(paymentNetwork)) {
+    if (
+      String(cfg.paymentNetwork) === String(paymentNetwork) ||
+      String(sdkTronNetwork(cfg.paymentNetwork)) === String(paymentNetwork)
+    ) {
       return cfg;
     }
   }
