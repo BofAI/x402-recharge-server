@@ -23,6 +23,7 @@ import { networkConfig, settings } from "./config.js";
 
 const app = express();
 const rateLimitBucket: number[] = [];
+const MCP_RESOURCE_URL = "/mcp";
 
 app.use(express.json({ limit: settings.requestBodyMaxBytes }));
 
@@ -122,7 +123,7 @@ function createMcpServer(): McpServer {
       const signature = Array.isArray(paymentSignature) ? paymentSignature[0] : paymentSignature;
       if (signature) {
         try {
-          const success = await paidRecharge(String(amount), String(token), signature, "/mcp tools/call recharge");
+          const success = await paidRecharge(String(amount), String(token), signature, MCP_RESOURCE_URL);
           return {
             content: [{ type: "text", text: JSON.stringify(success) }],
             structuredContent: success
@@ -147,7 +148,7 @@ function createMcpServer(): McpServer {
       }
 
       const tokenSymbol = normalizeToken(String(token));
-      const challenge = await buildRechargeChallenge(String(amount), tokenSymbol, "/mcp tools/call recharge");
+      const challenge = await buildRechargeChallenge(String(amount), tokenSymbol, MCP_RESOURCE_URL);
       const result = {
         status: "payment_required",
         message: "Payment required. Call this tool through MCP HTTP /mcp to receive standard x402 402 headers.",
@@ -194,7 +195,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       challenge = await buildRechargeChallenge(
         rechargeCall.amount,
         rechargeCall.token,
-        "/mcp tools/call recharge"
+        MCP_RESOURCE_URL
       );
     } catch (error) {
       res.status(400).json(rpcError(rechargeCall.id, -32602, "Invalid params", {
