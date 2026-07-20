@@ -8,7 +8,8 @@ import { NetworkConfig, networkConfig, networkConfigs, settings } from "./config
 
 const ALLOWED_TRC20_TOKENS = new Set(["USDT", "USDD"]);
 const BSC_ALLOWED_TOKENS = new Set(["USDT"]);
-const PAYMENT_SCHEME = "exact";
+const EXACT_SCHEME = "exact";
+const GASFREE_SCHEME = "exact_gasfree";
 const MIN_RECHARGE_AMOUNT = "1";
 const MAX_RECHARGE_AMOUNT = "20000";
 
@@ -149,11 +150,17 @@ function facilitatorNetworkCandidates(paymentNetwork: string): Network[] {
   return candidates;
 }
 
-function paymentExtra(cfg: NetworkConfig, tokenSymbol: string): Record<string, unknown> {
+function paymentExtra(cfg: NetworkConfig, tokenSymbol: string, scheme: string): Record<string, unknown> {
   if (cfg.paymentNetwork.startsWith("tron:")) {
     const token = getToken(sdkTronNetwork(cfg.paymentNetwork), tokenSymbol);
     if (!token) {
       return {};
+    }
+    if (scheme === GASFREE_SCHEME) {
+      return {
+        name: token.name,
+        ...(token.version !== undefined ? { version: token.version } : {})
+      };
     }
     const includeTip712Domain = !token.assetTransferMethod || Boolean(token.supportsEip2612);
     return {
@@ -245,15 +252,20 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
       continue;
     }
 
-    accepts.push({
-      scheme: PAYMENT_SCHEME,
-      network: cfg.paymentNetwork as Network,
-      amount: amountSmallest.toString(),
-      asset: tokenCfg.address,
-      payTo: cfg.bankofaiDepositAddress,
-      maxTimeoutSeconds: 3600,
-      extra: paymentExtra(cfg, tokenSymbol)
-    });
+    const schemes = cfg.paymentNetwork.startsWith("tron:")
+      ? [GASFREE_SCHEME, EXACT_SCHEME]
+      : [EXACT_SCHEME];
+    for (const scheme of schemes) {
+      accepts.push({
+        scheme,
+        network: cfg.paymentNetwork as Network,
+        amount: amountSmallest.toString(),
+        asset: tokenCfg.address,
+        payTo: cfg.bankofaiDepositAddress,
+        maxTimeoutSeconds: 3600,
+        extra: paymentExtra(cfg, tokenSymbol, scheme)
+      });
+    }
   }
 
   if (accepts.length === 0) {
@@ -343,6 +355,10 @@ function selectedRequirementFromPayload(payload: PaymentPayload, challenge: Paym
 
 function paymentWalletAddress(payload: PaymentPayload): string {
   const payment = payload.payload as Record<string, unknown>;
+  const gasfree = payment.gasfree as Record<string, unknown> | undefined;
+  if (typeof gasfree?.user === "string") {
+    return gasfree.user;
+  }
   const permit = payment.paymentPermit as Record<string, unknown> | undefined;
   if (typeof permit?.buyer === "string") {
     return permit.buyer;
