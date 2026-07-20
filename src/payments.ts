@@ -253,7 +253,7 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
     }
 
     const schemes = cfg.paymentNetwork.startsWith("tron:")
-      ? [GASFREE_SCHEME, EXACT_SCHEME]
+      ? [EXACT_SCHEME, GASFREE_SCHEME]
       : [EXACT_SCHEME];
     for (const scheme of schemes) {
       accepts.push({
