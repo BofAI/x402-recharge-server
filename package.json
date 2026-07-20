@@ -8,7 +8,8 @@
     "dev": "tsx src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --import tsx test/*.test.ts"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -26,9 +27,9 @@
     "@bankofai/agent-wallet": "^2.4.0",
     "@types/express": "^5.0.3",
     "@types/node": "^22.13.4",
-    "tronweb": "^6.3.0",
+    "tronweb": "^6.4.0",
     "tsx": "^4.21.0",
     "typescript": "^5.7.3",
-    "viem": "^2.53.1"
+    "viem": "^2.54.1"
   }
 }

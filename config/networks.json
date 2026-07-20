@@ -10,11 +10,6 @@
     "bankofaiWebUrl": "https://chat.bankofai.io",
     "erc8004Registry": "TFLvivMdKsk6v2GrwyD2apEr9dU1w7p7Fy",
     "tokens": {
-      "TRX": {
-        "symbol": "TRX",
-        "decimals": 6,
-        "minimum": "1000000"
-      },
       "USDT": {
         "symbol": "USDT",
         "address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
@@ -24,48 +19,6 @@
       "USDD": {
         "symbol": "USDD",
         "address": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
-        "decimals": 18,
-        "minimum": "1000000000000000000"
-      },
-      "USDC": {
-        "symbol": "USDC",
-        "address": "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
-        "decimals": 6,
-        "minimum": "1000000"
-      },
-      "NFT": {
-        "symbol": "NFT",
-        "address": "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9",
-        "decimals": 6,
-        "minimum": "100000000000"
-      }
-    }
-  },
-  "nile": {
-    "name": "TRON Nile",
-    "paymentNetwork": "tron:nile",
-    "rpcUrl": "https://nile.trongrid.io",
-    "explorer": "https://nile.tronscan.org",
-    "chainId": "3448148188",
-    "bankofaiDepositAddress": "TAJJNMLYBxVUdNi6UrTspkkc7aCQPbYVUp",
-    "bankofaiApiUrl": "https://chat-dev.bankofai.io/webapi/",
-    "bankofaiWebUrl": "https://chat-dev.bankofai.io",
-    "erc8004Registry": "TDDk4vc69nzBCbsY4kfu7gw2jmvbinirj5",
-    "tokens": {
-      "TRX": {
-        "symbol": "TRX",
-        "decimals": 6,
-        "minimum": "1000000"
-      },
-      "USDT": {
-        "symbol": "USDT",
-        "address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
-        "decimals": 6,
-        "minimum": "1000000"
-      },
-      "USDD": {
-        "symbol": "USDD",
-        "address": "TGjgvdTWWrybVLaVeFqSyVqJQWjxqRYbaK",
         "decimals": 18,
         "minimum": "1000000000000000000"
       }
@@ -85,31 +38,6 @@
       "USDT": {
         "symbol": "USDT",
         "address": "0x55d398326f99059fF775485246999027B3197955",
-        "decimals": 18,
-        "minimum": "1000000000000000000"
-      },
-      "USDD": {
-        "symbol": "USDD",
-        "address": "0x45e51bc23d592eb2dba86da3985299f7895d66ba",
-        "decimals": 18,
-        "minimum": "1000000000000000000"
-      }
-    }
-  },
-  "bsc_testnet": {
-    "name": "BSC Testnet",
-    "paymentNetwork": "eip155:97",
-    "rpcUrl": "https://data-seed-prebsc-1-s1.binance.org:8545",
-    "explorer": "https://testnet.bscscan.com",
-    "chainId": "97",
-    "bankofaiDepositAddress": "0x28095930ee5507e726A8F3A8EF7B9cD81836A695",
-    "bankofaiApiUrl": "https://chat-dev.bankofai.io/webapi/",
-    "bankofaiWebUrl": "https://chat-dev.bankofai.io",
-    "erc8004Registry": "",
-    "tokens": {
-      "USDT": {
-        "symbol": "USDT",
-        "address": "0x64544969ed7EBf5f083679233325356EbE738930",
         "decimals": 18,
         "minimum": "1000000000000000000"
       }

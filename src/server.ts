@@ -1,47 +1,75 @@
 import express from "express";
 import type { Request, Response } from "express";
+import type { SettleResponse } from "@bankofai/x402-core/types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import {
-  decodePaymentSignatureHeader,
   encodePaymentRequiredHeader,
   encodePaymentResponseHeader
 } from "@bankofai/x402-core/http";
 import {
-  buildRechargeChallenge,
-  DEFAULT_TRC20_TOKEN,
-  normalizeToken,
   PAYMENT_REQUIRED_HEADER,
   PAYMENT_RESPONSE_HEADER,
-  PAYMENT_SIGNATURE_HEADER,
-  paymentFailureDetails,
-  settleWithFacilitator
+  PAYMENT_SIGNATURE_HEADER
 } from "./payments.js";
-import { buildSuccessPayload, queryBalance, queryRechargeStatus } from "./bankofai.js";
 import { networkConfig, settings } from "./config.js";
+import { logger } from "./logger.js";
+import { FixedWindowRateLimiter } from "./rate-limit.js";
+import {
+  DEFAULT_TRC20_TOKEN,
+  createRechargeChallenge,
+  publicInvalidParams,
+  publicPaymentFailure,
+  settleRecharge
+} from "./recharge.js";
 
 const app = express();
-const rateLimitBucket: number[] = [];
-const MCP_RESOURCE_URL = "/mcp";
+const rateLimiter = new FixedWindowRateLimiter(settings.rateLimitPerMinute);
 
+app.disable("x-powered-by");
+if (settings.trustProxyHops > 0) {
+  app.set("trust proxy", settings.trustProxyHops);
+}
 app.use(express.json({ limit: settings.requestBodyMaxBytes }));
 
-function isRateLimited(): boolean {
-  const limit = settings.rateLimitPerMinute;
-  if (limit <= 0) {
+function rateLimitKey(req: Request): string {
+  return req.ip || req.socket.remoteAddress || "unknown";
+}
+
+function rejectIfRateLimited(req: Request, res: Response): boolean {
+  const result = rateLimiter.consume(rateLimitKey(req));
+  if (result.allowed) {
     return false;
   }
-  const now = Date.now() / 1000;
-  const cutoff = now - 60;
-  while (rateLimitBucket.length > 0 && rateLimitBucket[0] < cutoff) {
-    rateLimitBucket.shift();
+  res.status(429).json({ error: "rate_limited" });
+  return true;
+}
+
+function requestResourceUrl(req: Request): string {
+  const publicBaseUrl = settings.publicResourceBaseUrl.trim().replace(/\/+$/, "");
+  if (publicBaseUrl) {
+    return `${publicBaseUrl}${req.originalUrl}`;
   }
-  if (rateLimitBucket.length >= limit) {
-    return true;
+  const host = req.get("host") ?? "";
+  const hostname = (() => {
+    if (host.startsWith("[")) {
+      return host.slice(0, host.indexOf("]") + 1).toLowerCase();
+    }
+    return host.split(":")[0]?.toLowerCase();
+  })();
+  if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname)) {
+    throw new Error("PUBLIC_RESOURCE_BASE_URL is required for non-local requests");
   }
-  rateLimitBucket.push(now);
-  return false;
+  return `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+}
+
+function configuredResourceUrl(path: string): string {
+  const publicBaseUrl = settings.publicResourceBaseUrl.trim().replace(/\/+$/, "");
+  if (publicBaseUrl) {
+    return `${publicBaseUrl}${path}`;
+  }
+  return `http://127.0.0.1:${settings.port}${path}`;
 }
 
 function rpcResult(id: unknown, result: Record<string, unknown>): Record<string, unknown> {
@@ -54,6 +82,14 @@ function rpcError(id: unknown, code: number, message: string, data?: Record<stri
     error.data = data;
   }
   return { jsonrpc: "2.0", id, error };
+}
+
+function settlementFromPayload(payload: Record<string, unknown>): SettleResponse {
+  return payload.settlement as SettleResponse;
+}
+
+function responseStatus(payload: Record<string, unknown>): number {
+  return payload.status === "payment_pending" ? 202 : 200;
 }
 
 function isRechargeToolCall(body: unknown): { id: unknown; amount: string; token: string } | undefined {
@@ -82,25 +118,6 @@ function isRechargeToolCall(body: unknown): { id: unknown; amount: string; token
   };
 }
 
-async function paidRecharge(amount: string, token: string, paymentSignature: string, resourceUrl: string): Promise<Record<string, unknown>> {
-  const tokenSymbol = normalizeToken(token);
-  const challenge = await buildRechargeChallenge(amount, tokenSymbol, resourceUrl);
-  const { settlement, requirements, walletAddress } = await settleWithFacilitator(paymentSignature, challenge);
-  const txHash = String(settlement.transaction ?? "");
-  const bankofaiRecharge = await queryRechargeStatus(txHash, String(requirements.network));
-  const bankofaiBalance = await queryBalance(walletAddress, String(requirements.network));
-  return buildSuccessPayload({
-    txHash,
-    token: tokenSymbol,
-    amount,
-    settlement,
-    mode: "trc20_x402",
-    requirements,
-    bankofaiRecharge,
-    bankofaiBalance
-  });
-}
-
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "x402-recharge-server",
@@ -123,32 +140,35 @@ function createMcpServer(): McpServer {
       const signature = Array.isArray(paymentSignature) ? paymentSignature[0] : paymentSignature;
       if (signature) {
         try {
-          const success = await paidRecharge(String(amount), String(token), signature, MCP_RESOURCE_URL);
+          const success = await settleRecharge({
+            amount: String(amount),
+            token: String(token),
+            paymentSignature: signature,
+            resourceUrl: configuredResourceUrl("/mcp")
+          });
           return {
             content: [{ type: "text", text: JSON.stringify(success) }],
             structuredContent: success
           };
         } catch (error) {
-          const details = paymentFailureDetails(error);
           return {
             isError: true,
             content: [{
               type: "text",
               text: JSON.stringify({
                 status: "payment_verification_failed",
-                error: "payment_verification_failed",
-                failure_stage: details.stage,
-                failure_reason: details.reason,
-                detail: details.raw,
-                message: "Provided payment is invalid or settlement failed. Create a new payment and retry."
+                ...publicPaymentFailure(error)
               })
             }]
           };
         }
       }
 
-      const tokenSymbol = normalizeToken(String(token));
-      const challenge = await buildRechargeChallenge(String(amount), tokenSymbol, MCP_RESOURCE_URL);
+      const { challenge } = await createRechargeChallenge({
+        amount: String(amount),
+        token: String(token),
+        resourceUrl: configuredResourceUrl("/mcp")
+      });
       const result = {
         status: "payment_required",
         message: "Payment required. Call this tool through MCP HTTP /mcp to receive standard x402 402 headers.",
@@ -183,8 +203,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.post("/mcp", async (req: Request, res: Response) => {
-  if (isRateLimited()) {
-    res.status(429).json({ error: "rate_limited" });
+  if (rejectIfRateLimited(req, res)) {
     return;
   }
 
@@ -192,14 +211,14 @@ app.post("/mcp", async (req: Request, res: Response) => {
   if (rechargeCall) {
     let challenge;
     try {
-      challenge = await buildRechargeChallenge(
-        rechargeCall.amount,
-        rechargeCall.token,
-        MCP_RESOURCE_URL
-      );
+      challenge = (await createRechargeChallenge({
+        amount: rechargeCall.amount,
+        token: rechargeCall.token,
+        resourceUrl: requestResourceUrl(req)
+      })).challenge;
     } catch (error) {
       res.status(400).json(rpcError(rechargeCall.id, -32602, "Invalid params", {
-        error: error instanceof Error ? error.message : String(error)
+        error: publicInvalidParams(error)
       }));
       return;
     }
@@ -214,32 +233,19 @@ app.post("/mcp", async (req: Request, res: Response) => {
     }
 
     try {
-      const { settlement, requirements, walletAddress } = await settleWithFacilitator(paymentSignature, challenge);
-      const txHash = String(settlement.transaction ?? "");
-      const bankofaiRecharge = await queryRechargeStatus(txHash, String(requirements.network));
-      const bankofaiBalance = await queryBalance(walletAddress, String(requirements.network));
-      const success = buildSuccessPayload({
-        txHash,
-        token: rechargeCall.token,
+      const success = await settleRecharge({
         amount: rechargeCall.amount,
-        settlement,
-        mode: "trc20_x402",
-        requirements,
-        bankofaiRecharge,
-        bankofaiBalance
+        token: rechargeCall.token,
+        paymentSignature,
+        resourceUrl: requestResourceUrl(req)
       });
       res
-        .status(200)
-        .set(PAYMENT_RESPONSE_HEADER, encodePaymentResponseHeader(settlement))
+        .status(responseStatus(success))
+        .set(PAYMENT_RESPONSE_HEADER, encodePaymentResponseHeader(settlementFromPayload(success)))
         .json(rpcResult(rechargeCall.id, success));
     } catch (error) {
-      const details = paymentFailureDetails(error);
       res.status(400).json(rpcError(rechargeCall.id, -32003, "Payment verification failed", {
-        error: "payment_verification_failed",
-        failure_stage: details.stage,
-        failure_reason: details.reason,
-        detail: details.raw,
-        message: "Provided payment is invalid or settlement failed. Create a new payment and retry."
+        ...publicPaymentFailure(error)
       }));
     }
     return;
@@ -255,7 +261,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       void server.close();
     });
   } catch (error) {
-    console.error("Error handling MCP request:", error);
+    logger.error("error handling MCP request", logger.errorFields(error));
     if (!res.headersSent) {
       res.status(500).json(rpcError(null, -32603, "Internal server error"));
     }
@@ -271,22 +277,19 @@ app.delete("/mcp", (_req, res) => {
 });
 
 async function handleX402Recharge(req: Request, res: Response): Promise<void> {
-  if (isRateLimited()) {
-    res.status(429).json({ error: "rate_limited" });
+  if (rejectIfRateLimited(req, res)) {
     return;
   }
 
   const amount = String(req.body?.amount ?? "");
   const token = String(req.body?.token ?? DEFAULT_TRC20_TOKEN);
-  let tokenSymbol: string;
   let challenge;
   try {
-    tokenSymbol = normalizeToken(token);
-    challenge = await buildRechargeChallenge(amount, tokenSymbol, `${req.protocol}://${req.get("host")}${req.originalUrl}`);
+    challenge = (await createRechargeChallenge({ amount, token, resourceUrl: requestResourceUrl(req) })).challenge;
   } catch (error) {
     res.status(400).json({
       error: "invalid_params",
-      message: error instanceof Error ? error.message : String(error)
+      message: publicInvalidParams(error)
     });
     return;
   }
@@ -301,33 +304,19 @@ async function handleX402Recharge(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    decodePaymentSignatureHeader(paymentSignature);
-    const { settlement, requirements, walletAddress } = await settleWithFacilitator(paymentSignature, challenge);
-    const txHash = String(settlement.transaction ?? "");
-    const bankofaiRecharge = await queryRechargeStatus(txHash, String(requirements.network));
-    const bankofaiBalance = await queryBalance(walletAddress, String(requirements.network));
-    const success = buildSuccessPayload({
-      txHash,
-      token: tokenSymbol,
+    const success = await settleRecharge({
       amount,
-      settlement,
-      mode: "trc20_x402",
-      requirements,
-      bankofaiRecharge,
-      bankofaiBalance
+      token,
+      paymentSignature,
+      resourceUrl: requestResourceUrl(req)
     });
     res
-      .status(200)
-      .set(PAYMENT_RESPONSE_HEADER, encodePaymentResponseHeader(settlement))
+      .status(responseStatus(success))
+      .set(PAYMENT_RESPONSE_HEADER, encodePaymentResponseHeader(settlementFromPayload(success)))
       .json(success);
   } catch (error) {
-    const details = paymentFailureDetails(error);
     res.status(400).json({
-      error: "payment_verification_failed",
-      failure_stage: details.stage,
-      failure_reason: details.reason,
-      detail: details.raw,
-      message: "Provided payment is invalid or settlement failed. Create a new payment and retry."
+      ...publicPaymentFailure(error)
     });
   }
 }
@@ -345,25 +334,22 @@ app.use((error: unknown, _req: Request, res: Response, _next: express.NextFuncti
     res.status(413).json({ error: "request_too_large" });
     return;
   }
-  console.error("Unhandled request error:", error);
+  logger.error("unhandled request error", logger.errorFields(error));
   res.status(500).json({ error: "internal_server_error" });
 });
 
 const httpServer = app.listen(settings.port, settings.host, () => {
-  console.info("=".repeat(60));
-  console.info("BANK OF AI Payment MCP Server Starting");
-  console.info("Environment: %s", settings.bankofaiEnv);
-  console.info("Network: %s", networkConfig.name);
-  console.info("BANK OF AI Deposit Address: %s", networkConfig.bankofaiDepositAddress);
-  console.info("Tools: recharge");
-  console.info("MCP Streamable HTTP Endpoint: http://%s:%s/mcp", settings.host, settings.port);
-  console.info("x402 HTTP Endpoint: http://%s:%s/x402/recharge", settings.host, settings.port);
-  console.info("x402 TRC20 HTTP Endpoint: http://%s:%s/x402/trc20/recharge", settings.host, settings.port);
-  console.info("=".repeat(60));
+  logger.info("BANK OF AI Payment MCP Server Starting", {
+    environment: settings.bankofaiEnv,
+    network: networkConfig.name,
+    depositAddress: networkConfig.bankofaiDepositAddress,
+    mcpEndpoint: `http://${settings.host}:${settings.port}/mcp`,
+    x402Endpoint: `http://${settings.host}:${settings.port}/x402/recharge`
+  });
 });
 
 httpServer.on("error", (error) => {
-  console.error("Failed to start server:", error);
+  logger.error("failed to start server", logger.errorFields(error));
   process.exitCode = 1;
 });
 

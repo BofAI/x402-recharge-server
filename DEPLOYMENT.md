@@ -23,16 +23,15 @@ Supported routes:
 cp .env.example .env
 ```
 
-Minimum production values:
+For OP-managed deployments, inject only the environment-specific values:
 
 ```dotenv
-BANKOFAI_ENV=prod
-HOST=0.0.0.0
-PORT=8000
-LOG_LEVEL=info
-X402_FACILITATOR_URL=https://facilitator.bankofai.io
-FACILITATOR_API_KEY=MAIN_API_KEY
+PUBLIC_RESOURCE_BASE_URL=https://tn-recharge.bankofai.io
+X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io
 ```
+
+`X402_FACILITATOR_API_KEY` is optional. Set it only when the facilitator requires API key auth or higher rate limits.
+`FACILITATOR_API_KEY` is still accepted as a backward-compatible alias.
 
 ## Deploy
 

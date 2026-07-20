@@ -64,11 +64,12 @@ const x402FacilitatorUrl = bankofaiEnv.toLowerCase().trim() === "dev"
 export const settings = {
   bankofaiEnv,
   tronRpcUrl: envString("TRON_RPC_URL", ""),
+  publicResourceBaseUrl: envString("PUBLIC_RESOURCE_BASE_URL", ""),
   host: envString("HOST", "0.0.0.0"),
   port: envNumber("PORT", 8000),
   logLevel: envString("LOG_LEVEL", "info"),
   x402FacilitatorUrl,
-  facilitatorApiKey: envString("FACILITATOR_API_KEY", ""),
+  facilitatorApiKey: envString("X402_FACILITATOR_API_KEY", envString("FACILITATOR_API_KEY", "")),
   facilitatorTimeoutSeconds: envNumber("FACILITATOR_TIMEOUT_SECONDS", 10),
   facilitatorVerifyRetries: envNumber("FACILITATOR_VERIFY_RETRIES", 1),
   facilitatorRetryBackoffSeconds: envNumber("FACILITATOR_RETRY_BACKOFF_SECONDS", 0.5),
@@ -77,18 +78,16 @@ export const settings = {
   bankofaiMerchantKey: envString("BANKOFAI_MERCHANT_KEY", ""),
   bankofaiApiTimeoutSeconds: envNumber("BANKOFAI_API_TIMEOUT_SECONDS", 10),
   rateLimitPerMinute: envNumber("RATE_LIMIT_PER_MINUTE", 120),
-  requestBodyMaxBytes: envNumber("REQUEST_BODY_MAX_BYTES", 1_048_576)
+  requestBodyMaxBytes: envNumber("REQUEST_BODY_MAX_BYTES", 1_048_576),
+  trustProxyHops: envNumber("TRUST_PROXY_HOPS", 0)
 };
 
 export function activeNetworkName(): string {
   const env = settings.bankofaiEnv.toLowerCase().trim();
-  if (env === "dev") {
-    return "nile";
-  }
   if (env === "prod") {
     return "mainnet";
   }
-  throw new Error(`Invalid BANKOFAI_ENV: ${settings.bankofaiEnv}. Expected: dev | prod`);
+  throw new Error(`Invalid BANKOFAI_ENV: ${settings.bankofaiEnv}. This server only supports BANKOFAI_ENV=prod.`);
 }
 
 export const networkConfigs: NetworkConfigs = JSON.parse(
