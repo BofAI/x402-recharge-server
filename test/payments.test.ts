@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { networkConfigs } from "../src/config.js";
 import { bankofaiChainId, normalizeToken, supportedTokens } from "../src/payments.js";
 
 test("supported tokens are restricted to recharge payment scope", () => {
@@ -10,6 +11,8 @@ test("supported tokens are restricted to recharge payment scope", () => {
 });
 
 test("BANK OF AI chain ids are mainnet only", () => {
+  assert.equal(networkConfigs.mainnet.paymentNetwork, "tron:0x2b6653dc");
+  assert.equal(bankofaiChainId("tron:0x2b6653dc"), "eip155:728126428");
   assert.equal(bankofaiChainId("tron:mainnet"), "eip155:728126428");
   assert.equal(bankofaiChainId("eip155:56"), "eip155:56");
   assert.throws(() => bankofaiChainId("tron:nile"), /Unsupported chain mapping/);

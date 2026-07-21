@@ -11,7 +11,10 @@ RUN npm run build
 
 FROM node:22-slim
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    BANKOFAI_ENV=prod \
+    X402_FACILITATOR_URL=https://facilitator.bankofai.io \
+    TRON_RPC_URL=
 
 WORKDIR /app
 

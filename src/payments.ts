@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Network, PaymentPayload, PaymentRequired, PaymentRequirements, SettleResponse } from "@bankofai/x402-core/types";
 import { HTTPFacilitatorClient } from "@bankofai/x402-core/http";
 import { decodePaymentSignatureHeader } from "@bankofai/x402-core/http";
-import { getToken } from "@bankofai/x402-tron";
+import { getToken, TRON_MAINNET } from "@bankofai/x402-tron";
 import { getDefaultAsset } from "@bankofai/x402-evm";
 import { NetworkConfig, networkConfig, networkConfigs, settings } from "./config.js";
 import { PaymentFlowError } from "./errors.js";
@@ -11,7 +11,8 @@ import { logger } from "./logger.js";
 
 const ALLOWED_TRC20_TOKENS = new Set(["USDT", "USDD"]);
 const BSC_ALLOWED_TOKENS = new Set(["USDT"]);
-const PAYMENT_SCHEME = "exact";
+const EXACT_SCHEME = "exact";
+const GASFREE_SCHEME = "exact_gasfree";
 const MIN_RECHARGE_AMOUNT = "1";
 const MAX_RECHARGE_AMOUNT = "20000";
 
@@ -168,11 +169,33 @@ function decimalToSmallestUnit(amount: string, decimals: number): bigint {
   return BigInt(`${parsed.intPart}${paddedFrac}` || "0");
 }
 
-function paymentExtra(cfg: NetworkConfig, tokenSymbol: string): Record<string, unknown> {
+function sdkTronNetwork(paymentNetwork: string): Network {
+  if (paymentNetwork === "tron:mainnet") {
+    return TRON_MAINNET as Network;
+  }
+  return paymentNetwork as Network;
+}
+
+function facilitatorNetworkCandidates(paymentNetwork: string): Network[] {
+  const candidates = [paymentNetwork as Network];
+  const sdkNetwork = sdkTronNetwork(paymentNetwork);
+  if (!candidates.includes(sdkNetwork)) {
+    candidates.push(sdkNetwork);
+  }
+  return candidates;
+}
+
+function paymentExtra(cfg: NetworkConfig, tokenSymbol: string, scheme: string): Record<string, unknown> {
   if (cfg.paymentNetwork.startsWith("tron:")) {
-    const token = getToken(cfg.paymentNetwork as Network, tokenSymbol);
+    const token = getToken(sdkTronNetwork(cfg.paymentNetwork), tokenSymbol);
     if (!token) {
       return {};
+    }
+    if (scheme === GASFREE_SCHEME) {
+      return {
+        name: token.name,
+        ...(token.version !== undefined ? { version: token.version } : {})
+      };
     }
     const includeTip712Domain = !token.assetTransferMethod || Boolean(token.supportsEip2612);
     return {
@@ -264,15 +287,20 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
       continue;
     }
 
-    accepts.push({
-      scheme: PAYMENT_SCHEME,
-      network: cfg.paymentNetwork as Network,
-      amount: amountSmallest.toString(),
-      asset: tokenCfg.address,
-      payTo: cfg.bankofaiDepositAddress,
-      maxTimeoutSeconds: 3600,
-      extra: paymentExtra(cfg, tokenSymbol)
-    });
+    const schemes = cfg.paymentNetwork.startsWith("tron:")
+      ? [EXACT_SCHEME, GASFREE_SCHEME]
+      : [EXACT_SCHEME];
+    for (const scheme of schemes) {
+      accepts.push({
+        scheme,
+        network: cfg.paymentNetwork as Network,
+        amount: amountSmallest.toString(),
+        asset: tokenCfg.address,
+        payTo: cfg.bankofaiDepositAddress,
+        maxTimeoutSeconds: 3600,
+        extra: paymentExtra(cfg, tokenSymbol, scheme)
+      });
+    }
   }
 
   if (accepts.length === 0) {
@@ -289,8 +317,10 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
   }
 
   const supportedKinds = supported.kinds ?? [];
-  const filteredAccepts = accepts.map((accept) => {
-    const supportedKind = supportedKinds.find((kind) => kind.scheme === accept.scheme && kind.network === accept.network);
+  const filteredAccepts = accepts.flatMap((accept) => {
+    const supportedKind = supportedKinds.find((kind) =>
+      kind.scheme === accept.scheme && kind.network !== undefined && facilitatorNetworkCandidates(String(accept.network)).includes(kind.network as Network)
+    );
     if (!supportedKind) {
       logger.warn("advertising route not present in facilitator supported response", {
         tokenSymbol,
@@ -301,6 +331,7 @@ export async function buildRechargeChallenge(amount: string, token: string, reso
     }
     return {
       ...accept,
+      network: (supportedKind.network ?? accept.network) as Network,
       extra: {
         ...(supportedKind.extra ?? {}),
         ...(accept.extra ?? {})
@@ -357,6 +388,10 @@ function selectedRequirementFromPayload(payload: PaymentPayload, challenge: Paym
 
 function paymentWalletAddress(payload: PaymentPayload): string {
   const payment = payload.payload as Record<string, unknown>;
+  const gasfree = payment.gasfree as Record<string, unknown> | undefined;
+  if (typeof gasfree?.user === "string") {
+    return gasfree.user;
+  }
   const permit = payment.paymentPermit as Record<string, unknown> | undefined;
   if (typeof permit?.buyer === "string") {
     return permit.buyer;
@@ -454,7 +489,10 @@ async function settleDecodedPayload(
 
 export function findNetworkConfigByPaymentNetwork(paymentNetwork: string): NetworkConfig {
   for (const cfg of supportedPaymentNetworkConfigs()) {
-    if (String(cfg.paymentNetwork) === String(paymentNetwork)) {
+    if (
+      String(cfg.paymentNetwork) === String(paymentNetwork) ||
+      String(sdkTronNetwork(cfg.paymentNetwork)) === String(paymentNetwork)
+    ) {
       return cfg;
     }
   }
@@ -470,7 +508,7 @@ export function txExplorerUrl(txHash: string, paymentNetwork: string): string {
 }
 
 export function bankofaiChainId(paymentNetwork: string): string {
-  if (paymentNetwork === "tron:mainnet") {
+  if (paymentNetwork === TRON_MAINNET || paymentNetwork === "tron:mainnet") {
     return "eip155:728126428";
   }
   if (paymentNetwork === "eip155:56") {
