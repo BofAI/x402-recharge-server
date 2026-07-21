@@ -1,6 +1,6 @@
-# v1.1.0 Release Notes
+# v2.0.1 Release Notes
 
-**Date:** 2026-03-15
+**Date:** 2026-07-21
 
 ## Overview
 
@@ -12,7 +12,11 @@ BANK OF AI Payment Agent now exposes a single MCP recharge tool, `recharge`, and
 
 **Automatic Payment** — When an agent calls `recharge`, the service returns HTTP 402 with an x402 challenge. After the agent signs and retries, the service verifies and settles on-chain via the Facilitator. Fully automatic for x402-compatible clients.
 
-**Mainnet Deployment** — Runtime configuration defaults to mainnet payment routes with `X402_FACILITATOR_URL=https://facilitator-v2.bankofai.io`.
+**SDK 1.0.1** — Payment handling uses the released `@bankofai/x402-core`, `@bankofai/x402-evm`, and `@bankofai/x402-tron` version `1.0.1` packages.
+
+**Mainnet Deployment** — Runtime configuration defaults to mainnet payment routes with `X402_FACILITATOR_URL=https://facilitator.bankofai.io`.
+
+**Canonical Networks** — TRON mainnet challenges use `tron:0x2b6653dc`; BSC mainnet challenges use `eip155:56`.
 
 ## Supported Mainnet Tokens
 

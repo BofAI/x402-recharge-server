@@ -1,6 +1,6 @@
 {
   "name": "x402-recharge-server",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "x402 payment verification MCP service for BANK OF AI recharges on TRON and BSC",
   "type": "module",
   "main": "dist/server.js",
