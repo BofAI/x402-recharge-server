@@ -1,7 +1,7 @@
 {
   "mainnet": {
     "name": "TRON Mainnet",
-    "paymentNetwork": "tron:mainnet",
+    "paymentNetwork": "tron:0x2b6653dc",
     "rpcUrl": "https://api.trongrid.io",
     "explorer": "https://tronscan.org",
     "chainId": "728126428",
